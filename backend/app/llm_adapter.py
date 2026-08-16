@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 
 import anthropic
 
-from app.config import settings
+from app.core.config import settings
 
 
 class LLMAdapter(ABC):

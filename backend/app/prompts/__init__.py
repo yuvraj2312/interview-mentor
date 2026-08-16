@@ -1,0 +1,3 @@
+from app.prompts.interview_prompts import EVALUATION_PROMPT, QUESTION_GENERATION_PROMPT
+
+__all__ = ["EVALUATION_PROMPT", "QUESTION_GENERATION_PROMPT"]

@@ -6,6 +6,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str
     anthropic_model: str = "claude-haiku-4-5"
 
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+
+    cors_origins: list[str] = ["http://localhost:5173"]
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
