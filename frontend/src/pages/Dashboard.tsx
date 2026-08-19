@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { logout as logoutRequest } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
@@ -33,6 +33,14 @@ export function DashboardPage() {
         <p className="mt-2 text-sm text-slate-500">
           Your interview sessions and progress will show up here in a later phase.
         </p>
+        <div className="mt-8 flex justify-center gap-4">
+          <Button asChild>
+            <Link to="/resumes/upload">Upload resume</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/job-descriptions/new">Paste job description</Link>
+          </Button>
+        </div>
       </main>
     </div>
   )

@@ -17,10 +17,13 @@ interface TokenResponse {
 }
 
 async function rawRequest(path: string, init?: RequestInit): Promise<Response> {
+  const isFormData = init?.body instanceof FormData
   return fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      // FormData bodies must not set Content-Type manually - the browser
+      // needs to add its own multipart boundary.
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...init?.headers,
     },
   })
@@ -97,4 +100,84 @@ export async function logout(refreshToken: string): Promise<void> {
 
 export async function bootstrapSession(): Promise<boolean> {
   return tryRefresh()
+}
+
+export interface ResumeOut {
+  id: string
+  status: string
+  original_filename: string
+  structured_data: Record<string, unknown> | null
+  low_confidence_fields: string[] | null
+  error_message: string | null
+  created_at: string
+}
+
+export interface JobDescriptionOut {
+  id: string
+  status: string
+  raw_text: string
+  structured_data: Record<string, unknown> | null
+  low_confidence_fields: string[] | null
+  error_message: string | null
+  created_at: string
+}
+
+export interface SkillGapOut {
+  id: string
+  resume_id: string
+  job_description_id: string
+  matched_skills: string[]
+  missing_required_skills: string[]
+  missing_preferred_skills: string[]
+  match_score: number
+  created_at: string
+}
+
+export async function uploadResume(file: File): Promise<ResumeOut> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiRequest<ResumeOut>('/resumes', { method: 'POST', body: formData })
+}
+
+export async function getResume(id: string): Promise<ResumeOut> {
+  return apiRequest<ResumeOut>(`/resumes/${id}`)
+}
+
+export async function updateResume(id: string, structuredData: Record<string, unknown>): Promise<ResumeOut> {
+  return apiRequest<ResumeOut>(`/resumes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ structured_data: structuredData }),
+  })
+}
+
+export async function createJobDescription(rawText: string): Promise<JobDescriptionOut> {
+  return apiRequest<JobDescriptionOut>('/job-descriptions', {
+    method: 'POST',
+    body: JSON.stringify({ raw_text: rawText }),
+  })
+}
+
+export async function getJobDescription(id: string): Promise<JobDescriptionOut> {
+  return apiRequest<JobDescriptionOut>(`/job-descriptions/${id}`)
+}
+
+export async function updateJobDescription(
+  id: string,
+  structuredData: Record<string, unknown>,
+): Promise<JobDescriptionOut> {
+  return apiRequest<JobDescriptionOut>(`/job-descriptions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ structured_data: structuredData }),
+  })
+}
+
+export async function computeSkillGap(resumeId: string, jobDescriptionId: string): Promise<SkillGapOut> {
+  return apiRequest<SkillGapOut>('/skill-gap', {
+    method: 'POST',
+    body: JSON.stringify({ resume_id: resumeId, job_description_id: jobDescriptionId }),
+  })
+}
+
+export async function getSkillGap(id: string): Promise<SkillGapOut> {
+  return apiRequest<SkillGapOut>(`/skill-gap/${id}`)
 }

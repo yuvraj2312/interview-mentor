@@ -263,6 +263,11 @@ has concrete states and transitions:
 | Phase 8 — Voice, Coding & Whiteboard Modes | Additional interview modalities.                                                                                   | Explicitly deferred until after core loop validation                                            |
 | Phase 9 — Production Hardening             | Load testing, cost controls, security review, observability.                                                       | Unchanged                                                                                       |
 
+> **Note (Phase 6 dependency):** Phase 2's skill-gap comparison (`backend/app/services/skill_gap_service.py`)
+> currently does exact-string matching only, which misses synonyms and related skills (e.g. "JS"/"JavaScript",
+> "Postgres"/"PostgreSQL"). Once the vector database is introduced in Phase 6, skill-gap matching should be
+> upgraded to semantic/embedding-based comparison instead.
+
 12\. Recommended Starting Point
 
 Unchanged in principle from the original recommendation, now sequenced

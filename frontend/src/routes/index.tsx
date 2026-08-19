@@ -4,6 +4,10 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { LoginPage } from '@/pages/Login'
 import { SignupPage } from '@/pages/Signup'
 import { DashboardPage } from '@/pages/Dashboard'
+import { ResumeUploadPage } from '@/pages/ResumeUpload'
+import { ResumeReviewPage } from '@/pages/ResumeReview'
+import { JobDescriptionCreatePage } from '@/pages/JobDescriptionCreate'
+import { JobDescriptionReviewPage } from '@/pages/JobDescriptionReview'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -11,6 +15,12 @@ export const router = createBrowserRouter([
   { path: '/signup', element: <SignupPage /> },
   {
     element: <ProtectedRoute />,
-    children: [{ path: '/dashboard', element: <DashboardPage /> }],
+    children: [
+      { path: '/dashboard', element: <DashboardPage /> },
+      { path: '/resumes/upload', element: <ResumeUploadPage /> },
+      { path: '/resumes/:resumeId/review', element: <ResumeReviewPage /> },
+      { path: '/job-descriptions/new', element: <JobDescriptionCreatePage /> },
+      { path: '/job-descriptions/:jdId/review', element: <JobDescriptionReviewPage /> },
+    ],
   },
 ])

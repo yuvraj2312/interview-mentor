@@ -49,6 +49,13 @@ def client():
     yield TestClient(app)
     app.dependency_overrides.pop(get_db, None)
 
+    # The lazy Arq pool singleton binds to the event loop it was created
+    # on; TestClient uses a fresh loop per test, so a pool created in one
+    # test would raise "Event loop is closed" if reused in the next.
+    import app.core.deps as deps_module
+
+    deps_module._arq_pool = None
+
 
 def unique_email() -> str:
     return f"user-{uuid.uuid4().hex[:12]}@example.com"
