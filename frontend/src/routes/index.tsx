@@ -8,6 +8,8 @@ import { ResumeUploadPage } from '@/pages/ResumeUpload'
 import { ResumeReviewPage } from '@/pages/ResumeReview'
 import { JobDescriptionCreatePage } from '@/pages/JobDescriptionCreate'
 import { JobDescriptionReviewPage } from '@/pages/JobDescriptionReview'
+import { InterviewPlanCreatePage } from '@/pages/InterviewPlanCreate'
+import { InterviewPlanReviewPage } from '@/pages/InterviewPlanReview'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -21,6 +23,8 @@ export const router = createBrowserRouter([
       { path: '/resumes/:resumeId/review', element: <ResumeReviewPage /> },
       { path: '/job-descriptions/new', element: <JobDescriptionCreatePage /> },
       { path: '/job-descriptions/:jdId/review', element: <JobDescriptionReviewPage /> },
+      { path: '/interview-plans/new', element: <InterviewPlanCreatePage /> },
+      { path: '/interview-plans/:planId/review', element: <InterviewPlanReviewPage /> },
     ],
   },
 ])

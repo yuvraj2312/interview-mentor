@@ -181,3 +181,36 @@ export async function computeSkillGap(resumeId: string, jobDescriptionId: string
 export async function getSkillGap(id: string): Promise<SkillGapOut> {
   return apiRequest<SkillGapOut>(`/skill-gap/${id}`)
 }
+
+export type InterviewPlanFormat = 'quick' | 'standard' | 'thorough'
+
+export interface InterviewPlanOut {
+  id: string
+  resume_id: string
+  job_description_id: string
+  skill_gap_analysis_id: string
+  format: InterviewPlanFormat
+  status: string
+  question_count: number | null
+  topic_mix: { topic: string; question_count: number }[] | null
+  difficulty_min: number | null
+  difficulty_max: number | null
+  candidate_level: string | null
+  rationale: string | null
+  error_message: string | null
+  created_at: string
+}
+
+export async function generateInterviewPlan(
+  skillGapAnalysisId: string,
+  format: InterviewPlanFormat,
+): Promise<InterviewPlanOut> {
+  return apiRequest<InterviewPlanOut>('/interview-plans', {
+    method: 'POST',
+    body: JSON.stringify({ skill_gap_analysis_id: skillGapAnalysisId, format }),
+  })
+}
+
+export async function getInterviewPlan(id: string): Promise<InterviewPlanOut> {
+  return apiRequest<InterviewPlanOut>(`/interview-plans/${id}`)
+}

@@ -1,5 +1,6 @@
 from app.models.answer import Answer
 from app.models.evaluation import Evaluation
+from app.models.interview_plan import InterviewPlan
 from app.models.job_description import JobDescription
 from app.models.question import Question
 from app.models.refresh_token import RefreshToken
@@ -11,6 +12,7 @@ from app.models.user import User
 __all__ = [
     "Answer",
     "Evaluation",
+    "InterviewPlan",
     "JobDescription",
     "Question",
     "RefreshToken",

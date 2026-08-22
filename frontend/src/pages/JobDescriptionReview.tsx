@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 
 import { useJobDescriptionQuery, useUpdateJobDescription } from '@/hooks/useJobDescription'
 import { useComputeSkillGap } from '@/hooks/useSkillGap'
@@ -136,6 +136,9 @@ export function JobDescriptionReviewPage() {
                   <span className="font-medium text-amber-700">Missing preferred: </span>
                   {computeGap.data.missing_preferred_skills.join(', ') || 'None'}
                 </p>
+                <Button asChild className="mt-2 w-fit">
+                  <Link to={`/interview-plans/new?skillGapId=${computeGap.data.id}`}>Continue to interview plan</Link>
+                </Button>
               </div>
             )}
           </CardContent>
