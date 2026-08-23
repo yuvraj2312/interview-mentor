@@ -14,8 +14,11 @@ One compiled graph handles both REST entry points:
 The adjust_difficulty -> generate_question conditional edge is the actual cycle: a
 single graph.invoke() call for an "answer" request both scores the current turn
 and (if the session isn't finished) produces the next question in one pass.
-Each HTTP call still stops at END to hand control back to the human between turns
-- true resumable long-running graph execution (checkpointer/interrupts) is Phase 4b+.
+Each HTTP call still stops at END to hand control back to the human between
+turns. Phase 4b adds resumability at the app level (a Redis-backed live state
+store in interview_session_service.py/interview_session_state_repository.py,
+reconciled against Postgres) rather than via a LangGraph-native checkpointer -
+this graph itself remains stateless between invoke() calls.
 """
 
 from typing import Literal, TypedDict

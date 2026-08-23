@@ -26,6 +26,7 @@ class InterviewSession(Base):
     asked_questions: Mapped[list] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     turns: Mapped[list["InterviewTurn"]] = relationship(
         back_populates="session", order_by="InterviewTurn.idx", cascade="all, delete-orphan"

@@ -10,6 +10,7 @@ from app.repositories import interview_plan_repository, interview_session_reposi
 from app.schemas.interview_session import (
     CreateInterviewSessionRequest,
     InterviewSessionQuestionOut,
+    InterviewSessionStateOut,
     InterviewSessionSummaryOut,
     InterviewSessionTranscript,
     InterviewTurnEvaluationOut,
@@ -19,6 +20,10 @@ from app.schemas.interview_session import (
     SubmitInterviewAnswerResponse,
 )
 from app.services import interview_session_service
+from app.services.interview_session_service import (
+    InterviewSessionAbandonedError,
+    InterviewSessionCompleteError,
+)
 
 router = APIRouter()
 
@@ -82,8 +87,6 @@ def submit_interview_answer(
     current_user: User = Depends(get_current_user),
 ) -> SubmitInterviewAnswerResponse:
     session = _get_session_or_404(db, session_id, current_user.id)
-    if session.status == "complete":
-        raise HTTPException(status_code=400, detail="Interview session is already complete")
 
     plan = _get_plan_or_404(db, session.interview_plan_id, current_user.id)
     current_turn = next((t for t in session.turns if t.idx == session.current_turn_index), None)
@@ -94,6 +97,10 @@ def submit_interview_answer(
         session, evaluated_turn, next_turn = interview_session_service.submit_answer(
             db, session=session, plan=plan, current_turn=current_turn, answer_text=payload.answer_text
         )
+    except InterviewSessionCompleteError as exc:
+        raise HTTPException(status_code=400, detail="Interview session is already complete") from exc
+    except InterviewSessionAbandonedError as exc:
+        raise HTTPException(status_code=409, detail="Interview session was abandoned due to inactivity") from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"LLM returned an unusable response: {exc}") from exc
 
@@ -145,4 +152,28 @@ def get_interview_session(
 
     return InterviewSessionTranscript(
         session_id=session.id, status=session.status, total_questions=session.total_questions, turns=turns
+    )
+
+
+@router.get("/{session_id}/state", response_model=InterviewSessionStateOut)
+def get_interview_session_state(
+    session_id: uuid.UUID,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> InterviewSessionStateOut:
+    session = _get_session_or_404(db, session_id, current_user.id)
+    live_state = interview_session_service.get_live_state(db, session)
+
+    return InterviewSessionStateOut(
+        session_id=session.id,
+        status=live_state["status"],
+        turn_index=live_state["turn_index"],
+        total_questions=live_state["total_questions"],
+        current_difficulty=live_state["current_difficulty"],
+        current_question=(
+            InterviewSessionQuestionOut(**live_state["current_question"])
+            if live_state["current_question"] is not None
+            else None
+        ),
+        last_activity_at=live_state["last_activity_at"],
     )

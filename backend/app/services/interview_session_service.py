@@ -1,20 +1,55 @@
-"""Phase 4a interview session orchestration.
+"""Phase 4a/4b interview session orchestration.
 
 Builds the LangGraph state machine's initial state from a persisted
 InterviewPlan/InterviewSession, invokes it, and persists the result. Mirrors
 interview_plan_service.py's synchronous, single-LLM-call-per-request shape,
 and its convention of raising ValueError on malformed LLM output so the route
 layer can turn it into a 502.
+
+Phase 4b adds a Redis-backed live state store (interview_session_state_repository)
+as the fast, primary read path for in-progress turn continuity, with Postgres
+staying the durable source of truth for completed turns/final results and a
+coarse session status. get_live_state() is the single reconciliation point
+between the two stores - see its docstring for the recovery rules.
 """
 
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session as DBSession
 
+from app.core.config import settings
 from app.llm_adapter import get_llm_adapter
 from app.models import InterviewPlan, InterviewSession, InterviewTurn
 from app.repositories import interview_session_repository
+from app.repositories import interview_session_state_repository as state_repo
 from app.workflows.interview_graph import build_interview_graph
+from app.workflows.session_state import (
+    LiveQuestion,
+    LiveSessionState,
+    SessionStatus,
+    is_inactive,
+)
+
+
+class InterviewSessionCompleteError(Exception):
+    """Session is already COMPLETE; no further answers/state transitions apply."""
+
+    def __init__(self, session_id: uuid.UUID):
+        self.session_id = session_id
+        super().__init__(f"Interview session {session_id} is already complete")
+
+
+class InterviewSessionAbandonedError(Exception):
+    """Session is (or was just now flagged) ABANDONED by the lazy inactivity check."""
+
+    def __init__(self, session_id: uuid.UUID):
+        self.session_id = session_id
+        super().__init__(f"Interview session {session_id} was abandoned due to inactivity")
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _plan_context(plan: InterviewPlan) -> dict:
@@ -27,6 +62,130 @@ def _plan_context(plan: InterviewPlan) -> dict:
 
 def _topic_queue_from_mix(topic_mix: list) -> list[str]:
     return [topic["topic"] for topic in topic_mix for _ in range(topic["question_count"])]
+
+
+def _live_question(turn: InterviewTurn) -> LiveQuestion:
+    return {
+        "turn_index": turn.idx,
+        "topic": turn.topic,
+        "difficulty": turn.difficulty,
+        "question_text": turn.question_text,
+    }
+
+
+def _state_blob(
+    session_id: uuid.UUID,
+    *,
+    status: str,
+    turn_index: int,
+    total_questions: int,
+    current_difficulty: int,
+    topic_queue: list[str],
+    asked_questions: list[str],
+    current_question: LiveQuestion | None,
+    last_activity_at: datetime,
+) -> LiveSessionState:
+    return {
+        "session_id": str(session_id),
+        "status": status,
+        "turn_index": turn_index,
+        "total_questions": total_questions,
+        "current_difficulty": current_difficulty,
+        "topic_queue": topic_queue,
+        "asked_questions": asked_questions,
+        "current_question": current_question,
+        "last_activity_at": last_activity_at.isoformat(),
+    }
+
+
+def _terminal_blob(session: InterviewSession) -> LiveSessionState:
+    return _state_blob(
+        session.id,
+        status=session.status,
+        turn_index=session.current_turn_index,
+        total_questions=session.total_questions,
+        current_difficulty=session.current_difficulty,
+        topic_queue=session.topic_queue,
+        asked_questions=session.asked_questions,
+        current_question=None,
+        last_activity_at=session.last_activity_at,
+    )
+
+
+def _rehydrate_in_progress(session: InterviewSession) -> LiveSessionState:
+    current_turn = next(t for t in session.turns if t.idx == session.current_turn_index)
+    blob = _state_blob(
+        session.id,
+        status=SessionStatus.IN_PROGRESS.value,
+        turn_index=session.current_turn_index,
+        total_questions=session.total_questions,
+        current_difficulty=session.current_difficulty,
+        topic_queue=session.topic_queue,
+        asked_questions=session.asked_questions,
+        current_question=_live_question(current_turn),
+        last_activity_at=session.last_activity_at,
+    )
+    state_repo.save(blob)
+    return blob
+
+
+def _is_stuck_transient(state: LiveSessionState) -> bool:
+    if state["status"] not in (SessionStatus.EVALUATING.value, SessionStatus.ADVANCING.value):
+        return False
+    last_activity = datetime.fromisoformat(state["last_activity_at"])
+    return is_inactive(
+        last_activity, now=_now(), timeout_seconds=settings.interview_session_stuck_transient_seconds
+    )
+
+
+def get_live_state(db: DBSession, session: InterviewSession) -> LiveSessionState:
+    """Reconcile Redis's live state against Postgres for `session`.
+
+    Postgres is always the newer truth when the two disagree, since every
+    Postgres mutation lands in one atomic db.commit() per request, while a
+    Redis write can be left stale or missing by a request that crashed or
+    partially failed. Reconciliation order:
+
+    1. Postgres terminal check, unconditional: if session.status is already
+       complete/abandoned, that wins outright over any Redis hit - it also
+       self-heals the case where Postgres committed complete/abandoned but
+       the request's own follow-up Redis delete/save afterward failed.
+    2. A Redis hit is only trusted if it isn't a *stuck transient*: an
+       "evaluating"/"advancing" marker older than
+       interview_session_stuck_transient_seconds means a prior request wrote
+       that marker and then crashed (LLM error, process death) before ever
+       writing a final status, so it's orphaned, not a real in-flight
+       request.
+    3. On a miss (absent, or discarded as stuck), rebuild from Postgres and
+       repopulate Redis.
+    4. Only once state is trustworthy and non-terminal does the inactivity
+       check run.
+
+    This is called by both submit_answer() and GET /interview-sessions/{id}/state,
+    which deliberately makes the GET non-pure-read: it's the check-on-access
+    abandonment trigger, and now also the disagreement-repair trigger.
+    """
+    if session.status in (SessionStatus.COMPLETE.value, SessionStatus.ABANDONED.value):
+        state_repo.delete(session.id)
+        return _terminal_blob(session)
+
+    state = state_repo.load(session.id)
+    if state is not None and _is_stuck_transient(state):
+        state = None
+    if state is None:
+        state = _rehydrate_in_progress(session)
+
+    last_activity = datetime.fromisoformat(state["last_activity_at"])
+    if is_inactive(
+        last_activity, now=_now(), timeout_seconds=settings.interview_session_inactivity_timeout_seconds
+    ):
+        interview_session_repository.abandon(db, session)
+        db.commit()
+        db.refresh(session)
+        state_repo.delete(session.id)
+        return {**state, "status": SessionStatus.ABANDONED.value}
+
+    return state
 
 
 def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> tuple[InterviewSession, InterviewTurn]:
@@ -74,6 +233,20 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
     db.commit()
     db.refresh(session)
     db.refresh(turn)
+
+    state_repo.save(
+        _state_blob(
+            session.id,
+            status=SessionStatus.IN_PROGRESS.value,
+            turn_index=0,
+            total_questions=session.total_questions,
+            current_difficulty=starting_difficulty,
+            topic_queue=result["topic_queue"],
+            asked_questions=session.asked_questions,
+            current_question=_live_question(turn),
+            last_activity_at=session.last_activity_at,
+        )
+    )
     return session, turn
 
 
@@ -85,18 +258,33 @@ def submit_answer(
     Returns (session, evaluated current_turn, next_turn | None). next_turn is
     None when the session is now complete.
     """
+    live_state = get_live_state(db, session)
+
+    if live_state["status"] == SessionStatus.COMPLETE.value:
+        raise InterviewSessionCompleteError(session.id)
+    if live_state["status"] == SessionStatus.ABANDONED.value:
+        raise InterviewSessionAbandonedError(session.id)
+
+    # EVALUATING/ADVANCING bracket: adjust_difficulty -> generate_question is
+    # one uninterrupted graph.invoke() pass below, with no real pause point
+    # between them, so both are folded into a single transient "evaluating"
+    # status written just before that call. See workflows/session_state.py
+    # for why a genuine ADVANCING state is deferred to the Phase 4c
+    # WebSocket channel.
+    state_repo.save({**live_state, "status": SessionStatus.EVALUATING.value, "last_activity_at": _now().isoformat()})
+
     llm = get_llm_adapter()
     graph = build_interview_graph(llm)
     result = graph.invoke(
         {
             "action": "answer",
             "plan": _plan_context(plan),
-            "asked_questions": session.asked_questions,
-            "topic_queue": session.topic_queue,
-            "current_difficulty": session.current_difficulty,
-            "turn_index": session.current_turn_index,
-            "total_questions": session.total_questions,
-            "question_text": current_turn.question_text,
+            "asked_questions": live_state["asked_questions"],
+            "topic_queue": live_state["topic_queue"],
+            "current_difficulty": live_state["current_difficulty"],
+            "turn_index": live_state["turn_index"],
+            "total_questions": live_state["total_questions"],
+            "question_text": live_state["current_question"]["question_text"],
             "answer_text": answer_text,
             "next_topic": None,
             "next_question_text": None,
@@ -118,9 +306,10 @@ def submit_answer(
         db.commit()
         db.refresh(session)
         db.refresh(current_turn)
+        state_repo.delete(session.id)
         return session, current_turn, None
 
-    asked_questions = [*session.asked_questions, result["next_question_text"]]
+    asked_questions = [*live_state["asked_questions"], result["next_question_text"]]
     interview_session_repository.advance(
         db,
         session,
@@ -140,4 +329,18 @@ def submit_answer(
     db.refresh(session)
     db.refresh(current_turn)
     db.refresh(next_turn)
+
+    state_repo.save(
+        _state_blob(
+            session.id,
+            status=SessionStatus.IN_PROGRESS.value,
+            turn_index=session.current_turn_index,
+            total_questions=session.total_questions,
+            current_difficulty=session.current_difficulty,
+            topic_queue=session.topic_queue,
+            asked_questions=session.asked_questions,
+            current_question=_live_question(next_turn),
+            last_activity_at=session.last_activity_at,
+        )
+    )
     return session, current_turn, next_turn

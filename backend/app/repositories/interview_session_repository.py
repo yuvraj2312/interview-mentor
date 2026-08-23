@@ -49,14 +49,28 @@ def advance(
     session.current_difficulty = current_difficulty
     session.topic_queue = topic_queue
     session.asked_questions = asked_questions
+    session.last_activity_at = datetime.now(timezone.utc)
     db.add(session)
     db.flush()
     return session
 
 
 def complete(db: DBSession, session: InterviewSession) -> InterviewSession:
+    now = datetime.now(timezone.utc)
     session.status = "complete"
-    session.completed_at = datetime.now(timezone.utc)
+    session.completed_at = now
+    session.last_activity_at = now
+    db.add(session)
+    db.flush()
+    return session
+
+
+def abandon(db: DBSession, session: InterviewSession) -> InterviewSession:
+    # Deliberately does not touch last_activity_at: that timestamp is the
+    # evidence the inactivity timeout was exceeded, and overwriting it with
+    # "now" at detection time would erase when the candidate actually went
+    # idle.
+    session.status = "abandoned"
     db.add(session)
     db.flush()
     return session

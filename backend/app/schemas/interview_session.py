@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -60,3 +61,13 @@ class InterviewSessionTranscript(BaseModel):
     status: str
     total_questions: int
     turns: list[InterviewTurnOut]
+
+
+class InterviewSessionStateOut(BaseModel):
+    session_id: uuid.UUID
+    status: Literal["planned", "in_progress", "evaluating", "advancing", "complete", "abandoned"]
+    turn_index: int
+    total_questions: int
+    current_difficulty: int
+    current_question: InterviewSessionQuestionOut | None = None
+    last_activity_at: datetime
