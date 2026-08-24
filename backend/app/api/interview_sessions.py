@@ -166,6 +166,7 @@ def get_interview_session_state(
 
     return InterviewSessionStateOut(
         session_id=session.id,
+        interview_plan_id=session.interview_plan_id,
         status=live_state["status"],
         turn_index=live_state["turn_index"],
         total_questions=live_state["total_questions"],

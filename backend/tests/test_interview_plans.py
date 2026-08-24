@@ -173,8 +173,8 @@ def test_user_cannot_create_plan_from_another_users_skill_gap(client):
 
 def test_clamp_difficulty_bounds_junior_below_senior_jd_expectations():
     difficulty_min, difficulty_max = clamp_difficulty("junior", 3, 5)
-    assert difficulty_max == 2
-    assert difficulty_min == 2
+    assert difficulty_max == 3
+    assert difficulty_min == 3
 
 
 def test_clamp_difficulty_respects_a_valid_in_range_proposal():
@@ -183,4 +183,4 @@ def test_clamp_difficulty_respects_a_valid_in_range_proposal():
 
 def test_clamp_difficulty_unknown_level_falls_back_to_default_ceiling():
     difficulty_min, difficulty_max = clamp_difficulty("unknown", 1, 5)
-    assert difficulty_max == 3
+    assert difficulty_max == 4

@@ -65,6 +65,7 @@ class InterviewSessionTranscript(BaseModel):
 
 class InterviewSessionStateOut(BaseModel):
     session_id: uuid.UUID
+    interview_plan_id: uuid.UUID
     status: Literal["planned", "in_progress", "evaluating", "advancing", "complete", "abandoned"]
     turn_index: int
     total_questions: int

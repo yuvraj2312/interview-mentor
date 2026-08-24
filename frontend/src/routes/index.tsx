@@ -10,6 +10,7 @@ import { JobDescriptionCreatePage } from '@/pages/JobDescriptionCreate'
 import { JobDescriptionReviewPage } from '@/pages/JobDescriptionReview'
 import { InterviewPlanCreatePage } from '@/pages/InterviewPlanCreate'
 import { InterviewPlanReviewPage } from '@/pages/InterviewPlanReview'
+import { LiveInterviewPage } from '@/pages/LiveInterview'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
       { path: '/job-descriptions/:jdId/review', element: <JobDescriptionReviewPage /> },
       { path: '/interview-plans/new', element: <InterviewPlanCreatePage /> },
       { path: '/interview-plans/:planId/review', element: <InterviewPlanReviewPage /> },
+      { path: '/interview-sessions/:sessionId/live', element: <LiveInterviewPage /> },
     ],
   },
 ])

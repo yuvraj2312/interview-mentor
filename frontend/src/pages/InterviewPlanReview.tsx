@@ -1,11 +1,15 @@
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { useInterviewPlanQuery } from '@/hooks/useInterviewPlan'
+import { useStartInterviewSession } from '@/hooks/useInterviewSession'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 
 export function InterviewPlanReviewPage() {
   const { planId } = useParams<{ planId: string }>()
   const { data: plan, isLoading } = useInterviewPlanQuery(planId)
+  const navigate = useNavigate()
+  const startSession = useStartInterviewSession()
 
   if (isLoading || !plan) {
     return <div className="min-h-svh bg-slate-50 px-6 py-16 text-center text-sm text-slate-500">Loading...</div>
@@ -25,6 +29,13 @@ export function InterviewPlanReviewPage() {
         Generating your plan...
       </div>
     )
+  }
+
+  const readyPlanId = plan.id
+
+  async function handleStart() {
+    const result = await startSession.mutateAsync(readyPlanId)
+    navigate(`/interview-sessions/${result.session_id}/live`)
   }
 
   return (
@@ -67,6 +78,13 @@ export function InterviewPlanReviewPage() {
               <p className="text-sm font-medium text-slate-900">Rationale</p>
               <p className="mt-1 text-sm text-slate-600">{plan.rationale}</p>
             </div>
+
+            {startSession.isError && (
+              <p className="text-sm text-red-600">Could not start the interview. Please try again.</p>
+            )}
+            <Button onClick={handleStart} disabled={startSession.isPending} className="w-fit">
+              {startSession.isPending ? 'Starting…' : 'Start Interview'}
+            </Button>
           </CardContent>
         </Card>
       </main>

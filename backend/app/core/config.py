@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     interview_session_inactivity_timeout_seconds: int = 900
     interview_session_state_ttl_seconds: int = 86400
     interview_session_stuck_transient_seconds: int = 120
+    ws_auth_timeout_seconds: float = 10.0
 
     minio_endpoint_url: str = "http://localhost:9000"
     minio_access_key: str = "minioadmin"

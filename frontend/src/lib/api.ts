@@ -214,3 +214,104 @@ export async function generateInterviewPlan(
 export async function getInterviewPlan(id: string): Promise<InterviewPlanOut> {
   return apiRequest<InterviewPlanOut>(`/interview-plans/${id}`)
 }
+
+export type InterviewSessionStatus =
+  | 'planned'
+  | 'in_progress'
+  | 'evaluating'
+  | 'advancing'
+  | 'complete'
+  | 'abandoned'
+
+export interface InterviewQuestion {
+  turn_index: number
+  topic: string
+  difficulty: number
+  question_text: string
+}
+
+export interface InterviewEvaluation {
+  technical_score: number
+  communication_score: number
+  completeness_score: number
+  rationale: string
+}
+
+export interface InterviewSummary {
+  avg_technical_score: number
+  avg_communication_score: number
+  avg_completeness_score: number
+  difficulty_path: number[]
+}
+
+export interface InterviewTurnOut {
+  turn_index: number
+  topic: string
+  difficulty: number
+  question_text: string
+  answer_text: string | null
+  evaluation: InterviewEvaluation | null
+}
+
+export interface InterviewSessionTranscript {
+  session_id: string
+  status: string
+  total_questions: number
+  turns: InterviewTurnOut[]
+}
+
+export interface StartInterviewSessionResult {
+  session_id: string
+  total_questions: number
+  question: InterviewQuestion
+}
+
+// ---- WebSocket message shapes (/ws/interview-sessions/{id}) ----
+
+export interface InterviewStateMessage {
+  type: 'state'
+  session_id: string
+  interview_plan_id: string
+  status: InterviewSessionStatus
+  turn_index: number
+  total_questions: number
+  current_difficulty: number
+  current_question: InterviewQuestion | null
+  last_activity_at: string
+  summary: InterviewSummary | null
+}
+
+export interface InterviewAnswerResultMessage {
+  type: 'answer_result'
+  evaluation: InterviewEvaluation
+  status: 'in_progress' | 'complete'
+  next_question: InterviewQuestion | null
+  summary: InterviewSummary | null
+}
+
+export type InterviewWsErrorCode = 'bad_request' | 'llm_error' | 'inconsistent_state' | 'already_complete' | 'abandoned'
+
+export interface InterviewErrorMessage {
+  type: 'error'
+  code: InterviewWsErrorCode
+  detail: string
+}
+
+export type InterviewServerMessage = InterviewStateMessage | InterviewAnswerResultMessage | InterviewErrorMessage
+
+export type InterviewClientMessage = { type: 'auth'; token: string } | { type: 'answer'; answer_text: string }
+
+export async function startInterviewSession(planId: string): Promise<StartInterviewSessionResult> {
+  return apiRequest<StartInterviewSessionResult>('/interview-sessions', {
+    method: 'POST',
+    body: JSON.stringify({ interview_plan_id: planId }),
+  })
+}
+
+export async function getInterviewSessionTranscript(sessionId: string): Promise<InterviewSessionTranscript> {
+  return apiRequest<InterviewSessionTranscript>(`/interview-sessions/${sessionId}`)
+}
+
+export function interviewSessionWsUrl(sessionId: string): string {
+  return `${API_BASE_URL.replace(/^http/, 'ws')}/ws/interview-sessions/${sessionId}`
+}

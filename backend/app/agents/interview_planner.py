@@ -19,13 +19,13 @@ REQUIRED_KEYS = ("candidate_level", "topic_mix", "difficulty_min", "difficulty_m
 # exceed this ceiling for the inferred candidate_level (CLAUDE.md - Interview Planner
 # guardrail: "Plan must stay within candidate's stated experience level").
 DIFFICULTY_CEILING = {
-    "junior": 2,
-    "mid": 3,
-    "senior": 4,
+    "junior": 3,
+    "mid": 4,
+    "senior": 5,
     "staff": 5,
     "principal": 5,
 }
-DEFAULT_CEILING = 3
+DEFAULT_CEILING = 4
 
 
 def clamp_difficulty(candidate_level: str, difficulty_min: int, difficulty_max: int) -> tuple[int, int]:

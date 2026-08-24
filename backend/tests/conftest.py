@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.db as db_module
 from app.core.config import settings
 from app.core.redis_client import get_redis_client
 from app.db import Base, get_db
@@ -51,6 +52,15 @@ def _redis_namespace(monkeypatch):
 @pytest.fixture()
 def redis_client():
     return get_redis_client()
+
+
+@pytest.fixture(autouse=True)
+def _ws_db_override(monkeypatch):
+    # The WebSocket handler can't use Depends(get_db) (see
+    # app/websockets/interview_session_ws.py's module docstring) - it opens
+    # app.db.SessionLocal() manually per operation, so tests need that
+    # attribute itself pointed at the test database.
+    monkeypatch.setattr(db_module, "SessionLocal", TestSessionLocal)
 
 
 @pytest.fixture()
