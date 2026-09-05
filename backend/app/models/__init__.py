@@ -3,6 +3,7 @@ from app.models.evaluation import Evaluation
 from app.models.interview_plan import InterviewPlan
 from app.models.interview_session import InterviewSession, InterviewTurn
 from app.models.job_description import JobDescription
+from app.models.llm_call import LLMCall
 from app.models.question import Question
 from app.models.refresh_token import RefreshToken
 from app.models.resume import Resume
@@ -17,6 +18,7 @@ __all__ = [
     "InterviewSession",
     "InterviewTurn",
     "JobDescription",
+    "LLMCall",
     "Question",
     "RefreshToken",
     "Resume",

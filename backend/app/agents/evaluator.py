@@ -16,7 +16,7 @@ def evaluate_answer(llm: LLMAdapter, *, question_text: str, answer_text: str, di
     prompt = ADAPTIVE_EVALUATION_PROMPT.format(
         question_text=question_text, answer_text=answer_text, difficulty=difficulty
     )
-    raw = llm.generate(prompt, temperature=0.2, max_tokens=512)
+    raw = llm.generate(prompt, agent_name="evaluator", temperature=0.2, max_tokens=512)
     result = parse_llm_json(raw)
 
     if not isinstance(result, dict) or not all(k in result for k in REQUIRED_KEYS):

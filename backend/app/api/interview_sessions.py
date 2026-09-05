@@ -113,11 +113,21 @@ def submit_interview_answer(
 
     if next_turn is None:
         return SubmitInterviewAnswerResponse(
-            evaluation=evaluation_out, status="complete", summary=_build_summary(session)
+            evaluation=evaluation_out,
+            status="complete",
+            summary=_build_summary(session),
+            total_cost_usd=session.total_cost_usd,
+            cost_cap_usd=session.cost_cap_usd,
+            stop_reason=session.stop_reason,
         )
 
     return SubmitInterviewAnswerResponse(
-        evaluation=evaluation_out, status="in_progress", next_question=_question_out(next_turn)
+        evaluation=evaluation_out,
+        status="in_progress",
+        next_question=_question_out(next_turn),
+        total_cost_usd=session.total_cost_usd,
+        cost_cap_usd=session.cost_cap_usd,
+        stop_reason=session.stop_reason,
     )
 
 
@@ -177,4 +187,7 @@ def get_interview_session_state(
             else None
         ),
         last_activity_at=live_state["last_activity_at"],
+        total_cost_usd=live_state["total_cost_usd"],
+        cost_cap_usd=live_state["cost_cap_usd"],
+        stop_reason=live_state["stop_reason"],
     )

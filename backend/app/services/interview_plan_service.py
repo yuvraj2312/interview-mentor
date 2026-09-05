@@ -45,7 +45,7 @@ def create_and_generate(
     }
 
     try:
-        llm = get_llm_adapter()
+        llm = get_llm_adapter(db)
         result = generate_interview_plan(
             llm,
             resume_data=resume.structured_data,

@@ -1,11 +1,21 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth, interview_plans, interview_sessions, job_descriptions, resumes, sessions, skill_gap
 from app.core.config import settings
+from app.storage import ensure_bucket_exists
 from app.websockets import interview_session_ws
 
-app = FastAPI(title="Interview Mentor")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_bucket_exists()
+    yield
+
+
+app = FastAPI(title="Interview Mentor", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

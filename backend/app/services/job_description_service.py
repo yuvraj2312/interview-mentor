@@ -20,7 +20,7 @@ def create_and_analyze(db: DBSession, *, user_id: uuid.UUID, raw_text: str):
     db.refresh(jd)
 
     try:
-        llm = get_llm_adapter()
+        llm = get_llm_adapter(db)
         result = analyze_job_description(llm, raw_text)
     except ValueError:
         job_description_repository.update_status(db, jd, status="failed", error_message="LLM returned an unusable response")

@@ -52,6 +52,13 @@ class LiveSessionState(TypedDict):
     asked_questions: list[str]
     current_question: LiveQuestion | None
     last_activity_at: str  # ISO 8601 UTC
+    # Phase 4d cost cap: total_cost_usd is the running spend for this
+    # session; cost_cap_usd is the per-session limit snapshotted at session
+    # start; stop_reason distinguishes a natural finish from a cap-triggered
+    # one once the session is complete (None while still in progress).
+    total_cost_usd: float
+    cost_cap_usd: float
+    stop_reason: str | None
 
 
 def is_inactive(last_activity_at, *, now, timeout_seconds: int) -> bool:

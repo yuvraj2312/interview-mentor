@@ -268,6 +268,8 @@ export interface StartInterviewSessionResult {
 
 // ---- WebSocket message shapes (/ws/interview-sessions/{id}) ----
 
+export type InterviewStopReason = 'completed' | 'cost_cap_exceeded' | null
+
 export interface InterviewStateMessage {
   type: 'state'
   session_id: string
@@ -279,6 +281,9 @@ export interface InterviewStateMessage {
   current_question: InterviewQuestion | null
   last_activity_at: string
   summary: InterviewSummary | null
+  total_cost_usd: number
+  cost_cap_usd: number
+  stop_reason: InterviewStopReason
 }
 
 export interface InterviewAnswerResultMessage {
@@ -287,6 +292,9 @@ export interface InterviewAnswerResultMessage {
   status: 'in_progress' | 'complete'
   next_question: InterviewQuestion | null
   summary: InterviewSummary | null
+  total_cost_usd: number
+  cost_cap_usd: number
+  stop_reason: InterviewStopReason
 }
 
 export type InterviewWsErrorCode = 'bad_request' | 'llm_error' | 'inconsistent_state' | 'already_complete' | 'abandoned'

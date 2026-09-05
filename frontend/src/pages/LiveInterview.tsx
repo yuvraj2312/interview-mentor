@@ -95,6 +95,9 @@ export function LiveInterviewPage() {
             <ConnectionIndicator status={connectionStatus} />
           </div>
           <Progress value={history.length} max={state.total_questions} />
+          <p className="text-xs text-slate-500">
+            ${state.total_cost_usd.toFixed(3)} / ${state.cost_cap_usd.toFixed(2)} used
+          </p>
         </div>
 
         {history.length > 0 && (
@@ -160,7 +163,11 @@ export function LiveInterviewPage() {
           <Card>
             <CardHeader>
               <CardTitle>Interview complete</CardTitle>
-              <CardDescription>Here's how you did.</CardDescription>
+              <CardDescription>
+                {state.stop_reason === 'cost_cap_exceeded'
+                  ? 'This session ended early because it reached its cost limit. Here\'s how you did so far.'
+                  : "Here's how you did."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-wrap gap-4 text-sm text-slate-700">

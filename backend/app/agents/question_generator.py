@@ -28,7 +28,7 @@ def generate_question(
         candidate_level=candidate_level,
         asked_questions="\n".join(f"- {q}" for q in asked_questions) or "(none yet)",
     )
-    raw = llm.generate(prompt, temperature=0.7, max_tokens=512)
+    raw = llm.generate(prompt, agent_name="question_generator", temperature=0.7, max_tokens=512)
     result = parse_llm_json(raw)
 
     if not isinstance(result, dict) or not all(k in result for k in REQUIRED_KEYS):

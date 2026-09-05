@@ -50,11 +50,19 @@ class InterviewGraphState(TypedDict):
     question_text: str | None
     answer_text: str | None
 
+    # cost cap (Phase 4d): accumulated_cost_usd is the running total carried
+    # in from the caller (0.0 for a new session) and bumped by each node
+    # that calls the LLM; cost_cap_usd is a per-session constant snapshotted
+    # from settings.interview_session_max_cost_usd at session start.
+    accumulated_cost_usd: float
+    cost_cap_usd: float
+
     # outputs
     next_topic: str | None
     next_question_text: str | None
     evaluation: dict | None
     done: bool
+    stop_reason: Literal["completed", "cost_cap_exceeded"] | None
 
 
 def _route_entry(state: InterviewGraphState) -> str:
@@ -76,10 +84,12 @@ def build_interview_graph(llm: LLMAdapter):
             candidate_level=state["plan"]["candidate_level"],
             asked_questions=state["asked_questions"],
         )
+        cost_delta = llm.last_usage.cost_usd if llm.last_usage else 0.0
         return {
             "topic_queue": topic_queue,
             "next_topic": topic,
             "next_question_text": result["question_text"],
+            "accumulated_cost_usd": state["accumulated_cost_usd"] + cost_delta,
         }
 
     def deliver_question_node(state: InterviewGraphState) -> dict:
@@ -96,7 +106,8 @@ def build_interview_graph(llm: LLMAdapter):
             answer_text=state["answer_text"],
             difficulty=state["current_difficulty"],
         )
-        return {"evaluation": result}
+        cost_delta = llm.last_usage.cost_usd if llm.last_usage else 0.0
+        return {"evaluation": result, "accumulated_cost_usd": state["accumulated_cost_usd"] + cost_delta}
 
     def adjust_difficulty_node(state: InterviewGraphState) -> dict:
         evaluation = state["evaluation"]
@@ -110,8 +121,21 @@ def build_interview_graph(llm: LLMAdapter):
             plan["difficulty_max"],
         )
         turn_index = state["turn_index"] + 1
-        done = turn_index >= state["total_questions"] or not state["topic_queue"]
-        return {"current_difficulty": next_difficulty, "turn_index": turn_index, "done": done}
+        # Reactive cost cap (CLAUDE.md - "the interview loop needs a
+        # timeout/exit condition, not just a natural completion path"):
+        # checked once per turn, after this turn's calls have already
+        # completed, before deciding whether to loop back for another
+        # question. A session can overshoot the cap by at most one turn's
+        # worth of calls; it cannot loop indefinitely past it.
+        cost_cap_exceeded = state["accumulated_cost_usd"] >= state["cost_cap_usd"]
+        done = turn_index >= state["total_questions"] or not state["topic_queue"] or cost_cap_exceeded
+        stop_reason = "cost_cap_exceeded" if cost_cap_exceeded else ("completed" if done else None)
+        return {
+            "current_difficulty": next_difficulty,
+            "turn_index": turn_index,
+            "done": done,
+            "stop_reason": stop_reason,
+        }
 
     graph = StateGraph(InterviewGraphState)
     graph.add_node("generate_question", generate_question_node)

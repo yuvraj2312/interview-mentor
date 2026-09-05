@@ -45,6 +45,9 @@ class SubmitInterviewAnswerResponse(BaseModel):
     status: Literal["in_progress", "complete"]
     next_question: InterviewSessionQuestionOut | None = None
     summary: InterviewSessionSummaryOut | None = None
+    total_cost_usd: float
+    cost_cap_usd: float
+    stop_reason: Literal["completed", "cost_cap_exceeded"] | None = None
 
 
 class InterviewTurnOut(BaseModel):
@@ -72,3 +75,6 @@ class InterviewSessionStateOut(BaseModel):
     current_difficulty: int
     current_question: InterviewSessionQuestionOut | None = None
     last_activity_at: datetime
+    total_cost_usd: float
+    cost_cap_usd: float
+    stop_reason: Literal["completed", "cost_cap_exceeded"] | None = None

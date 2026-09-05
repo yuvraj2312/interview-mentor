@@ -15,6 +15,8 @@ def create(
     current_difficulty: int,
     topic_queue: list,
     asked_questions: list,
+    cost_cap_usd: float,
+    total_cost_usd: float = 0.0,
 ) -> InterviewSession:
     session = InterviewSession(
         user_id=user_id,
@@ -23,6 +25,8 @@ def create(
         current_difficulty=current_difficulty,
         topic_queue=topic_queue,
         asked_questions=asked_questions,
+        cost_cap_usd=cost_cap_usd,
+        total_cost_usd=total_cost_usd,
     )
     db.add(session)
     db.flush()
@@ -44,22 +48,28 @@ def advance(
     current_difficulty: int,
     topic_queue: list,
     asked_questions: list,
+    total_cost_usd: float,
 ) -> InterviewSession:
     session.current_turn_index += 1
     session.current_difficulty = current_difficulty
     session.topic_queue = topic_queue
     session.asked_questions = asked_questions
+    session.total_cost_usd = total_cost_usd
     session.last_activity_at = datetime.now(timezone.utc)
     db.add(session)
     db.flush()
     return session
 
 
-def complete(db: DBSession, session: InterviewSession) -> InterviewSession:
+def complete(
+    db: DBSession, session: InterviewSession, *, total_cost_usd: float, stop_reason: str
+) -> InterviewSession:
     now = datetime.now(timezone.utc)
     session.status = "complete"
     session.completed_at = now
     session.last_activity_at = now
+    session.total_cost_usd = total_cost_usd
+    session.stop_reason = stop_reason
     db.add(session)
     db.flush()
     return session

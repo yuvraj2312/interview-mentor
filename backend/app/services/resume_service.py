@@ -66,7 +66,7 @@ def process_uploaded_resume(db: DBSession, resume_id: uuid.UUID) -> None:
         resume_repository.update_status(db, resume, status="analyzing")
         db.commit()
 
-        llm = get_llm_adapter()
+        llm = get_llm_adapter(db)
         result = analyze_resume(llm, text)
 
         resume_repository.update_extracted(

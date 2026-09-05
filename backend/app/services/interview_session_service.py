@@ -84,6 +84,9 @@ def _state_blob(
     asked_questions: list[str],
     current_question: LiveQuestion | None,
     last_activity_at: datetime,
+    total_cost_usd: float,
+    cost_cap_usd: float,
+    stop_reason: str | None,
 ) -> LiveSessionState:
     return {
         "session_id": str(session_id),
@@ -95,6 +98,9 @@ def _state_blob(
         "asked_questions": asked_questions,
         "current_question": current_question,
         "last_activity_at": last_activity_at.isoformat(),
+        "total_cost_usd": total_cost_usd,
+        "cost_cap_usd": cost_cap_usd,
+        "stop_reason": stop_reason,
     }
 
 
@@ -109,6 +115,9 @@ def _terminal_blob(session: InterviewSession) -> LiveSessionState:
         asked_questions=session.asked_questions,
         current_question=None,
         last_activity_at=session.last_activity_at,
+        total_cost_usd=session.total_cost_usd,
+        cost_cap_usd=session.cost_cap_usd,
+        stop_reason=session.stop_reason,
     )
 
 
@@ -124,6 +133,9 @@ def _rehydrate_in_progress(session: InterviewSession) -> LiveSessionState:
         asked_questions=session.asked_questions,
         current_question=_live_question(current_turn),
         last_activity_at=session.last_activity_at,
+        total_cost_usd=session.total_cost_usd,
+        cost_cap_usd=session.cost_cap_usd,
+        stop_reason=session.stop_reason,
     )
     state_repo.save(blob)
     return blob
@@ -193,7 +205,25 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
     starting_difficulty = round((plan.difficulty_min + plan.difficulty_max) / 2)
     starting_difficulty = max(plan.difficulty_min, min(starting_difficulty, plan.difficulty_max))
 
-    llm = get_llm_adapter()
+    cost_cap_usd = settings.interview_session_max_cost_usd
+
+    # Row created (flushed, not committed) before the graph call so its id
+    # exists in Postgres for the LLM adapter's trace insert to reference:
+    # AnthropicAdapter.generate() flushes its llm_calls row immediately
+    # per call (not deferred to this function's later db.commit()), and
+    # llm_calls.session_id has an FK on interview_sessions.id.
+    session = interview_session_repository.create(
+        db,
+        user_id=user_id,
+        interview_plan_id=plan.id,
+        total_questions=plan.question_count,
+        current_difficulty=starting_difficulty,
+        topic_queue=topic_queue,
+        asked_questions=[],
+        cost_cap_usd=cost_cap_usd,
+    )
+
+    llm = get_llm_adapter(db, session_id=session.id)
     graph = build_interview_graph(llm)
     result = graph.invoke(
         {
@@ -206,22 +236,21 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
             "total_questions": plan.question_count,
             "question_text": None,
             "answer_text": None,
+            "accumulated_cost_usd": 0.0,
+            "cost_cap_usd": cost_cap_usd,
             "next_topic": None,
             "next_question_text": None,
             "evaluation": None,
             "done": False,
+            "stop_reason": None,
         }
     )
 
-    session = interview_session_repository.create(
-        db,
-        user_id=user_id,
-        interview_plan_id=plan.id,
-        total_questions=plan.question_count,
-        current_difficulty=starting_difficulty,
-        topic_queue=result["topic_queue"],
-        asked_questions=[result["next_question_text"]],
-    )
+    session.topic_queue = result["topic_queue"]
+    session.asked_questions = [result["next_question_text"]]
+    session.total_cost_usd = result["accumulated_cost_usd"]
+    db.add(session)
+
     turn = InterviewTurn(
         session_id=session.id,
         idx=0,
@@ -245,6 +274,9 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
             asked_questions=session.asked_questions,
             current_question=_live_question(turn),
             last_activity_at=session.last_activity_at,
+            total_cost_usd=session.total_cost_usd,
+            cost_cap_usd=session.cost_cap_usd,
+            stop_reason=None,
         )
     )
     return session, turn
@@ -273,7 +305,7 @@ def submit_answer(
     # WebSocket channel.
     state_repo.save({**live_state, "status": SessionStatus.EVALUATING.value, "last_activity_at": _now().isoformat()})
 
-    llm = get_llm_adapter()
+    llm = get_llm_adapter(db, session_id=session.id)
     graph = build_interview_graph(llm)
     result = graph.invoke(
         {
@@ -286,10 +318,13 @@ def submit_answer(
             "total_questions": live_state["total_questions"],
             "question_text": live_state["current_question"]["question_text"],
             "answer_text": answer_text,
+            "accumulated_cost_usd": live_state["total_cost_usd"],
+            "cost_cap_usd": live_state["cost_cap_usd"],
             "next_topic": None,
             "next_question_text": None,
             "evaluation": None,
             "done": False,
+            "stop_reason": None,
         }
     )
 
@@ -302,7 +337,9 @@ def submit_answer(
     db.add(current_turn)
 
     if result["done"]:
-        interview_session_repository.complete(db, session)
+        interview_session_repository.complete(
+            db, session, total_cost_usd=result["accumulated_cost_usd"], stop_reason=result["stop_reason"]
+        )
         db.commit()
         db.refresh(session)
         db.refresh(current_turn)
@@ -316,6 +353,7 @@ def submit_answer(
         current_difficulty=result["current_difficulty"],
         topic_queue=result["topic_queue"],
         asked_questions=asked_questions,
+        total_cost_usd=result["accumulated_cost_usd"],
     )
     next_turn = InterviewTurn(
         session_id=session.id,
@@ -341,6 +379,9 @@ def submit_answer(
             asked_questions=session.asked_questions,
             current_question=_live_question(next_turn),
             last_activity_at=session.last_activity_at,
+            total_cost_usd=session.total_cost_usd,
+            cost_cap_usd=session.cost_cap_usd,
+            stop_reason=None,
         )
     )
     return session, current_turn, next_turn

@@ -39,7 +39,7 @@ def start_session(
     current_user: User = Depends(get_current_user),
 ) -> StartSessionResponse:
     try:
-        generated = interview_service.generate_questions(payload.resume_text, payload.jd_text)
+        generated = interview_service.generate_questions(db, payload.resume_text, payload.jd_text)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"LLM returned an unusable response: {exc}") from exc
 
@@ -85,7 +85,7 @@ def submit_answer(
         raise HTTPException(status_code=500, detail="Session state is inconsistent: no current question")
 
     try:
-        result = interview_service.evaluate_answer(current_question.text, payload.answer_text)
+        result = interview_service.evaluate_answer(db, current_question.text, payload.answer_text)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"LLM returned an unusable response: {exc}") from exc
 

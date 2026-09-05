@@ -49,7 +49,7 @@ def generate_interview_plan(
         jd_data=json.dumps(jd_data),
         skill_gap=json.dumps(skill_gap),
     )
-    raw = llm.generate(prompt, temperature=0.2, max_tokens=1536)
+    raw = llm.generate(prompt, agent_name="interview_planner", temperature=0.2, max_tokens=1536)
     result = parse_llm_json(raw)
 
     if not isinstance(result, dict) or not all(k in result for k in REQUIRED_KEYS):

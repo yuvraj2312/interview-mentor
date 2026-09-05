@@ -13,7 +13,7 @@ REQUIRED_KEYS = ("skills", "experience", "education", "projects", "low_confidenc
 
 def analyze_resume(llm: LLMAdapter, resume_text: str) -> dict:
     prompt = RESUME_ANALYSIS_PROMPT.format(resume_text=resume_text)
-    raw = llm.generate(prompt, temperature=0.2, max_tokens=2048)
+    raw = llm.generate(prompt, agent_name="resume_analyzer", temperature=0.2, max_tokens=2048)
     result = parse_llm_json(raw)
 
     if not isinstance(result, dict) or not all(k in result for k in REQUIRED_KEYS):

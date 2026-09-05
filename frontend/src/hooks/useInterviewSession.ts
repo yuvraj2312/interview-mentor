@@ -118,6 +118,9 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
                 current_question: message.next_question,
                 turn_index: message.next_question ? message.next_question.turn_index : prev.turn_index + 1,
                 summary: message.summary,
+                total_cost_usd: message.total_cost_usd,
+                cost_cap_usd: message.cost_cap_usd,
+                stop_reason: message.stop_reason,
               }
             : prev,
         )

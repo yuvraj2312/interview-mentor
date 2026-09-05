@@ -87,6 +87,9 @@ def _state_envelope(session, live_state: dict) -> dict:
             else None
         ),
         last_activity_at=live_state["last_activity_at"],
+        total_cost_usd=live_state["total_cost_usd"],
+        cost_cap_usd=live_state["cost_cap_usd"],
+        stop_reason=live_state["stop_reason"],
     ).model_dump(mode="json")
     message = {"type": "state", **payload, "summary": None}
     if live_state["status"] == "complete":
@@ -131,6 +134,9 @@ def _handle_answer(session_id: uuid.UUID, user_id: uuid.UUID, answer_text: str) 
                 "status": "complete",
                 "next_question": None,
                 "summary": _build_summary(session).model_dump(mode="json"),
+                "total_cost_usd": session.total_cost_usd,
+                "cost_cap_usd": session.cost_cap_usd,
+                "stop_reason": session.stop_reason,
             }
             return message, True
 
@@ -140,6 +146,9 @@ def _handle_answer(session_id: uuid.UUID, user_id: uuid.UUID, answer_text: str) 
             "status": "in_progress",
             "next_question": _question_out(next_turn).model_dump(mode="json"),
             "summary": None,
+            "total_cost_usd": session.total_cost_usd,
+            "cost_cap_usd": session.cost_cap_usd,
+            "stop_reason": session.stop_reason,
         }
         return message, False
     except InterviewSessionCompleteError:
