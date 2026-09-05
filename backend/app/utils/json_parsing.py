@@ -11,4 +11,9 @@ import re
 
 def parse_llm_json(raw: str) -> dict | list:
     cleaned = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
-    return json.loads(cleaned)
+    # raw_decode (rather than json.loads) parses just the leading JSON document and
+    # ignores anything after it, since models occasionally trail the closing fence
+    # with stray characters (e.g. an extra quote) that would otherwise raise on
+    # otherwise-well-formed output.
+    obj, _ = json.JSONDecoder().raw_decode(cleaned)
+    return obj

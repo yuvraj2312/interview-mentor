@@ -268,6 +268,18 @@ has concrete states and transitions:
 > "Postgres"/"PostgreSQL"). Once the vector database is introduced in Phase 6, skill-gap matching should be
 > upgraded to semantic/embedding-based comparison instead.
 
+> **Note (Phase 9 hardening item):** The Phase 5 evaluator human-audit (`docs/phase5_evaluation_audit.md`)
+> surfaced that a long, multi-part question can occasionally make the LLM deviate from the required JSON
+> response shape (e.g. splitting one rationale across several `*_score_rationale` keys, or trailing the
+> closing fence with stray characters). Both known triggers were fixed at the prompt/parsing level
+> (`ADAPTIVE_EVALUATION_PROMPT` in `backend/app/prompts/evaluator_prompts.py`, and
+> `parse_llm_json` in `backend/app/utils/json_parsing.py`, which now uses `json.JSONDecoder().raw_decode`
+> to tolerate trailing garbage) and re-verified at 26/26 clean across varied questions - but `LLMAdapter.generate()`
+> (`backend/app/llm_adapter.py`) still has no retry on a malformed response; a single bad parse still surfaces
+> as a 502 to the candidate mid-interview. A one-retry-on-malformed-JSON safety net in the adapter layer -
+> shared by every agent, not just the evaluator - is worthwhile resilience-under-rare-failure work for
+> Phase 9 (Production Hardening).
+
 12\. Recommended Starting Point
 
 Unchanged in principle from the original recommendation, now sequenced
