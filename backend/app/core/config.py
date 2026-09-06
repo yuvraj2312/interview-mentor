@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     embedding_model_name: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = 384
     skill_match_similarity_threshold: float = 0.85
+    skill_trend_delta_threshold: float = 0.5
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

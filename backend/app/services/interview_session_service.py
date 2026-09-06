@@ -23,6 +23,7 @@ from app.llm_adapter import get_llm_adapter
 from app.models import InterviewPlan, InterviewSession, InterviewTurn
 from app.repositories import interview_session_repository
 from app.repositories import interview_session_state_repository as state_repo
+from app.services import skill_profile_service
 from app.workflows.interview_graph import build_interview_graph
 from app.workflows.session_state import (
     LiveQuestion,
@@ -340,6 +341,12 @@ def submit_answer(
         interview_session_repository.complete(
             db, session, total_cost_usd=result["accumulated_cost_usd"], stop_reason=result["stop_reason"]
         )
+        # current_turn's evaluation scores above are only db.add()-ed, not
+        # flushed - SessionLocal runs autoflush=False (app/db.py), so an
+        # explicit flush here is required for recompute_for_user()'s fresh
+        # query to see this session's final turn.
+        db.flush()
+        skill_profile_service.recompute_for_user(db, session.user_id)
         db.commit()
         db.refresh(session)
         db.refresh(current_turn)

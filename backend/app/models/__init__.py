@@ -9,6 +9,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.resume import Resume
 from app.models.session import Session
 from app.models.skill_gap_analysis import SkillGapAnalysis
+from app.models.skill_profile import SkillProfile, SkillProfileTopicStat
 from app.models.user import User
 
 __all__ = [
@@ -24,5 +25,7 @@ __all__ = [
     "Resume",
     "Session",
     "SkillGapAnalysis",
+    "SkillProfile",
+    "SkillProfileTopicStat",
     "User",
 ]
