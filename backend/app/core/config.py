@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     minio_bucket_name: str = "resumes"
     minio_secure: bool = False
 
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_learning_resources_collection: str = "learning_resources"
+    embedding_model_name: str = "BAAI/bge-small-en-v1.5"
+    embedding_dimension: int = 384
+    skill_match_similarity_threshold: float = 0.85
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

@@ -496,7 +496,7 @@ are built out.
 |--------------------|-------------------------------------------------------------------------------------------------------------------------|
 | Frontend           | React, TypeScript, Tailwind CSS, Shadcn UI, React Query, Zustand, Recharts                                              |
 | Backend            | FastAPI, SQLAlchemy, Alembic, Pydantic                                                                                  |
-| AI / Orchestration | GPT-5 / Claude (behind a provider adapter), LangGraph, LangChain where appropriate, Sentence Transformers, FAISS/Qdrant |
+| AI / Orchestration | GPT-5 / Claude (behind a provider adapter), LangGraph, LangChain where appropriate, fastembed, FAISS/Qdrant |
 | Async Processing   | Celery or Arq with Redis as broker                                                                                      |
 | Data               | PostgreSQL, Redis, Vector Database (FAISS/Qdrant), Object Storage (S3/Azure Blob)                                       |
 | Infrastructure     | Docker, GitHub Actions (CI/CD), AWS or Azure                                                                            |

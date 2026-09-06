@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth, interview_plans, interview_sessions, job_descriptions, resumes, sessions, skill_gap
 from app.core.config import settings
+from app.embedding_adapter import warm_embedding_model
+from app.services import vector_store_service
 from app.storage import ensure_bucket_exists
 from app.websockets import interview_session_ws
 
@@ -12,6 +14,10 @@ from app.websockets import interview_session_ws
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_bucket_exists()
+    warm_embedding_model()
+    vector_store_service.ensure_collection(
+        settings.qdrant_learning_resources_collection, vector_size=settings.embedding_dimension
+    )
     yield
 
 

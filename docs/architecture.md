@@ -243,7 +243,7 @@ has concrete states and transitions:
 | Backend            | FastAPI, SQLAlchemy, Alembic, Pydantic                                                                                      |
 | Real-time          | WebSockets / Server-Sent Events for the live interview channel (new)                                                        |
 | Async Processing   | Celery or Arq with Redis as broker (new)                                                                                    |
-| AI / Orchestration | GPT-5 / Claude behind a provider adapter (new), LangGraph, LangChain where appropriate, Sentence Transformers, FAISS/Qdrant |
+| AI / Orchestration | GPT-5 / Claude behind a provider adapter (new), LangGraph, LangChain where appropriate, fastembed, FAISS/Qdrant |
 | Data               | PostgreSQL, Redis, Vector Database (FAISS/Qdrant), Object Storage — S3/Azure Blob (new)                                     |
 | Infrastructure     | Docker, GitHub Actions, AWS or Azure                                                                                        |
 | Observability      | Structured logging + LLM call tracing, e.g. LangSmith or equivalent (new)                                                   |
@@ -263,10 +263,22 @@ has concrete states and transitions:
 | Phase 8 — Voice, Coding & Whiteboard Modes | Additional interview modalities.                                                                                   | Explicitly deferred until after core loop validation                                            |
 | Phase 9 — Production Hardening             | Load testing, cost controls, security review, observability.                                                       | Unchanged                                                                                       |
 
-> **Note (Phase 6 dependency):** Phase 2's skill-gap comparison (`backend/app/services/skill_gap_service.py`)
-> currently does exact-string matching only, which misses synonyms and related skills (e.g. "JS"/"JavaScript",
-> "Postgres"/"PostgreSQL"). Once the vector database is introduced in Phase 6, skill-gap matching should be
-> upgraded to semantic/embedding-based comparison instead.
+> **Note (Phase 6a, resolved):** Phase 2's skill-gap comparison (`backend/app/services/skill_gap_service.py`)
+> used to do exact-string matching only, which missed synonyms and related skills (e.g. "JS"/"JavaScript",
+> "Postgres"/"PostgreSQL"). Phase 6a's initial embedding-only design turned out to be unsafe on its own:
+> cosine similarity on bare skill tokens can't reliably separate true synonyms from false friends (e.g.
+> "Java"/"JavaScript" scores *higher* than several legitimate abbreviation pairs) — there is no single
+> threshold that is both safe and useful. The shipped fix is layered: exact-string match, then a curated
+> alias table (`backend/app/core/skill_aliases.py`) for well-known abbreviations, then embedding cosine
+> similarity (`backend/app/embedding_adapter.py`) as a conservative fallback for whatever's left. The vector
+> database's primary role stays what this table describes above (a persistent knowledge base for
+> questions/ideal answers/learning resources) — skill-gap matching compares two small per-request lists
+> in-process and does not read from or write to it; Phase 6c populates and queries the knowledge base for
+> roadmap resource matching.
+>
+> The embedding library used is **fastembed** (Qdrant's own lightweight ONNX-based library) rather than the
+> Sentence Transformers named in the tech-stack table above — no torch dependency, smaller footprint, faster
+> cold start, and it pairs naturally with qdrant-client since that's needed anyway.
 
 > **Note (Phase 9 hardening item):** The Phase 5 evaluator human-audit (`docs/phase5_evaluation_audit.md`)
 > surfaced that a long, multi-part question can occasionally make the LLM deviate from the required JSON
