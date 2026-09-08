@@ -9,6 +9,7 @@ from app.api import (
     interview_sessions,
     job_descriptions,
     resumes,
+    roadmap,
     sessions,
     skill_gap,
     skill_profiles,
@@ -48,4 +49,5 @@ app.include_router(skill_gap.router, prefix="/skill-gap", tags=["skill-gap"])
 app.include_router(skill_profiles.router, prefix="/skill-profile", tags=["skill-profile"])
 app.include_router(interview_plans.router, prefix="/interview-plans", tags=["interview-plans"])
 app.include_router(interview_sessions.router, prefix="/interview-sessions", tags=["interview-sessions"])
+app.include_router(roadmap.router, prefix="/roadmap", tags=["roadmap"])
 app.include_router(interview_session_ws.router, tags=["interview-sessions-ws"])

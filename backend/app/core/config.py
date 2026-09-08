@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     embedding_dimension: int = 384
     skill_match_similarity_threshold: float = 0.85
     skill_trend_delta_threshold: float = 0.5
+    learning_resource_similarity_threshold: float = 0.3
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

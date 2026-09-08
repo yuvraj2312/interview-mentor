@@ -30,6 +30,10 @@ def create(
     return analysis
 
 
+def get_by_id(db: DBSession, skill_gap_id: uuid.UUID) -> SkillGapAnalysis | None:
+    return db.query(SkillGapAnalysis).filter(SkillGapAnalysis.id == skill_gap_id).first()
+
+
 def get_by_id_for_user(db: DBSession, skill_gap_id: uuid.UUID, user_id: uuid.UUID) -> SkillGapAnalysis | None:
     return (
         db.query(SkillGapAnalysis)

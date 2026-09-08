@@ -33,6 +33,10 @@ def create(
     return session
 
 
+def get_by_id(db: DBSession, session_id: uuid.UUID) -> InterviewSession | None:
+    return db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+
+
 def get_by_id_for_user(db: DBSession, session_id: uuid.UUID, user_id: uuid.UUID) -> InterviewSession | None:
     return (
         db.query(InterviewSession)

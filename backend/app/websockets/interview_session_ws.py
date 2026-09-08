@@ -31,6 +31,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app import db as db_module
 from app.api.interview_sessions import _build_summary, _question_out
 from app.core.config import settings
+from app.core.deps import get_arq_pool
 from app.core.security import decode_access_token
 from app.models import User
 from app.repositories import interview_plan_repository, interview_session_repository, user_repository
@@ -211,6 +212,14 @@ async def interview_session_ws(websocket: WebSocket, session_id: uuid.UUID) -> N
 
         message, close_after = await asyncio.to_thread(_handle_answer, session_id, user.id, raw["answer_text"])
         await websocket.send_json(message)
+        if message.get("status") == "complete":
+            # Roadmap generation makes an LLM call + vector search, so it
+            # runs as a background job (see mentor_service.py) rather than
+            # inline here. Enqueueing is fast async I/O, unlike the
+            # blocking work to_thread() exists to isolate above, so it's
+            # fine to await directly on the event loop.
+            arq_pool = await get_arq_pool()
+            await arq_pool.enqueue_job("generate_roadmap", str(session_id))
         if close_after:
             await websocket.close(code=1000)
             return

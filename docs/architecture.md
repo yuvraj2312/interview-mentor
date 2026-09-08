@@ -280,6 +280,19 @@ has concrete states and transitions:
 > Sentence Transformers named in the tech-stack table above — no torch dependency, smaller footprint, faster
 > cold start, and it pairs naturally with qdrant-client since that's needed anyway.
 
+> **Note (Phase 6b, known limitation - deliberately deferred):** `SkillProfile`
+> (`backend/app/models/skill_profile.py`) groups interview turns into per-topic stats by simple
+> case/whitespace-normalized string matching only (`topic_key` in `backend/app/services/skill_profile_service.py`).
+> Interview topics are LLM-generated free text per plan with no fixed taxonomy, so two sessions describing the
+> same underlying skill with differently-phrased topic labels (e.g. "REST APIs" vs "RESTful API Design") will
+> fragment into separate topic-stat rows instead of merging — a real gap in cross-session continuity, left
+> unsolved here rather than papered over. This is a candidate for a future semantic-grouping pass, but topic
+> *phrases* are a different matching problem than the single skill tokens Phase 6a calibrated its embedding
+> threshold against — 6a found cosine similarity alone unsafe there even for short tokens ("Java"/"JavaScript"
+> scored higher than several true synonyms). Don't bolt on embedding-based topic clustering later without first
+> testing it with the same rigor: real positive/negative topic-phrase pairs, checked for a threshold that
+> actually separates them, not an assumed extension of the 6a threshold.
+
 > **Note (Phase 9 hardening item):** The Phase 5 evaluator human-audit (`docs/phase5_evaluation_audit.md`)
 > surfaced that a long, multi-part question can occasionally make the LLM deviate from the required JSON
 > response shape (e.g. splitting one rationale across several `*_score_rationale` keys, or trailing the

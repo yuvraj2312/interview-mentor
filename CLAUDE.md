@@ -8,6 +8,17 @@ This repository currently contains **only planning documentation** (`docs/BRD.md
 
 When the user asks you to start implementing, follow the folder structure and phasing below rather than inventing a different structure. When code does exist in this repo in a future session, re-derive actual commands (package.json scripts, Makefile targets, etc.) from what's on disk rather than trusting this file blindly — update this section once real tooling exists.
 
+## Dev workflow
+
+Once `backend/` exists: infra (`postgres`, `redis`, `minio`, `qdrant`) runs in Docker; the FastAPI app and the Arq worker run **on the host**, not in Docker — this keeps them attached to `--reload`/a debugger. `backend/docker-compose.yml`'s `backend` and `worker` services are tagged with the `full-stack` Compose profile specifically so a plain `docker compose up -d` cannot start them and collide with the host processes on the same ports/queue — this was a repeated real footgun, not a hypothetical one, so don't remove the profile tag as a "simplification."
+
+Standard local dev loop, from `backend/`:
+- `docker compose up -d` — starts only postgres (`localhost:5433`), redis (`localhost:6380`), minio (`localhost:9000`), qdrant (`localhost:6333`) — matches `backend/.env`. This is the command to reach for by default.
+- `uvicorn app.main:app --reload` — run the API on the host.
+- `arq app.background.worker.WorkerSettings` — run the background worker on the host.
+
+`docker compose --profile full-stack up -d` also starts `backend`/`worker` as containers — only use this for a deliberate fully-containerized run (e.g. a from-scratch smoke test), and don't run it alongside the host `uvicorn`/`arq` commands above, since both would bind the same ports/queue.
+
 ## Project
 
 **Interview Mentor** — an AI-powered adaptive interview coaching platform. It ingests a candidate's resume and a target job description, generates a tailored interview plan, runs a multi-turn adaptive interview (difficulty adjusts in real time based on answer quality), evaluates answers across multiple dimensions, and produces a long-term learning roadmap.

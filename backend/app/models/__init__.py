@@ -7,6 +7,7 @@ from app.models.llm_call import LLMCall
 from app.models.question import Question
 from app.models.refresh_token import RefreshToken
 from app.models.resume import Resume
+from app.models.roadmap import Roadmap, RoadmapItem
 from app.models.session import Session
 from app.models.skill_gap_analysis import SkillGapAnalysis
 from app.models.skill_profile import SkillProfile, SkillProfileTopicStat
@@ -23,6 +24,8 @@ __all__ = [
     "Question",
     "RefreshToken",
     "Resume",
+    "Roadmap",
+    "RoadmapItem",
     "Session",
     "SkillGapAnalysis",
     "SkillProfile",

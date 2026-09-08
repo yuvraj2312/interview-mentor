@@ -1,9 +1,10 @@
 import uuid
 
+from arq import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_arq_pool, get_current_user
 from app.db import get_db
 from app.models import InterviewPlan, InterviewSession, InterviewTurn, User
 from app.repositories import interview_plan_repository, interview_session_repository
@@ -80,10 +81,11 @@ def start_interview_session(
 
 
 @router.post("/{session_id}/answer", response_model=SubmitInterviewAnswerResponse)
-def submit_interview_answer(
+async def submit_interview_answer(
     session_id: uuid.UUID,
     payload: SubmitInterviewAnswerRequest,
     db: DBSession = Depends(get_db),
+    arq_pool: ArqRedis = Depends(get_arq_pool),
     current_user: User = Depends(get_current_user),
 ) -> SubmitInterviewAnswerResponse:
     session = _get_session_or_404(db, session_id, current_user.id)
@@ -112,6 +114,10 @@ def submit_interview_answer(
     )
 
     if next_turn is None:
+        # Roadmap generation makes an LLM call + vector search, so like
+        # resume/JD analysis it runs as a background job rather than
+        # inline in this response (see mentor_service.py).
+        await arq_pool.enqueue_job("generate_roadmap", str(session.id))
         return SubmitInterviewAnswerResponse(
             evaluation=evaluation_out,
             status="complete",

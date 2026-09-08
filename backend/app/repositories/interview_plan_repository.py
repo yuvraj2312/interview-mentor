@@ -26,6 +26,10 @@ def create(
     return plan
 
 
+def get_by_id(db: DBSession, plan_id: uuid.UUID) -> InterviewPlan | None:
+    return db.query(InterviewPlan).filter(InterviewPlan.id == plan_id).first()
+
+
 def get_by_id_for_user(db: DBSession, plan_id: uuid.UUID, user_id: uuid.UUID) -> InterviewPlan | None:
     return db.query(InterviewPlan).filter(InterviewPlan.id == plan_id, InterviewPlan.user_id == user_id).first()
 
