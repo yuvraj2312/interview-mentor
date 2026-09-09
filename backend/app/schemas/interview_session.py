@@ -66,6 +66,18 @@ class InterviewSessionTranscript(BaseModel):
     turns: list[InterviewTurnOut]
 
 
+class InterviewSessionListItemOut(BaseModel):
+    session_id: uuid.UUID
+    status: str
+    total_questions: int
+    turns_completed: int
+    avg_technical_score: float | None
+    avg_communication_score: float | None
+    avg_completeness_score: float | None
+    created_at: datetime
+    completed_at: datetime | None
+
+
 class InterviewSessionStateOut(BaseModel):
     session_id: uuid.UUID
     interview_plan_id: uuid.UUID

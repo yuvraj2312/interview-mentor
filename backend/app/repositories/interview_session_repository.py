@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session as DBSession
+from sqlalchemy.orm import Session as DBSession, selectinload
 
 from app.models import InterviewSession
 
@@ -42,6 +42,17 @@ def get_by_id_for_user(db: DBSession, session_id: uuid.UUID, user_id: uuid.UUID)
         db.query(InterviewSession)
         .filter(InterviewSession.id == session_id, InterviewSession.user_id == user_id)
         .first()
+    )
+
+
+def list_for_user(db: DBSession, user_id: uuid.UUID, limit: int = 50) -> list[InterviewSession]:
+    return (
+        db.query(InterviewSession)
+        .filter(InterviewSession.user_id == user_id)
+        .options(selectinload(InterviewSession.turns))
+        .order_by(InterviewSession.created_at.desc())
+        .limit(limit)
+        .all()
     )
 
 

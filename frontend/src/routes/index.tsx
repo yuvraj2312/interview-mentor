@@ -11,6 +11,10 @@ import { JobDescriptionReviewPage } from '@/pages/JobDescriptionReview'
 import { InterviewPlanCreatePage } from '@/pages/InterviewPlanCreate'
 import { InterviewPlanReviewPage } from '@/pages/InterviewPlanReview'
 import { LiveInterviewPage } from '@/pages/LiveInterview'
+import { AnalyticsPage } from '@/pages/Analytics'
+import { SessionHistoryPage } from '@/pages/SessionHistory'
+import { SessionDetailPage } from '@/pages/SessionDetail'
+import { RoadmapPage } from '@/pages/Roadmap'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -27,6 +31,10 @@ export const router = createBrowserRouter([
       { path: '/interview-plans/new', element: <InterviewPlanCreatePage /> },
       { path: '/interview-plans/:planId/review', element: <InterviewPlanReviewPage /> },
       { path: '/interview-sessions/:sessionId/live', element: <LiveInterviewPage /> },
+      { path: '/interview-sessions/:sessionId', element: <SessionDetailPage /> },
+      { path: '/analytics', element: <AnalyticsPage /> },
+      { path: '/sessions', element: <SessionHistoryPage /> },
+      { path: '/roadmap', element: <RoadmapPage /> },
     ],
   },
 ])

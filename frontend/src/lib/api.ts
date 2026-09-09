@@ -323,3 +323,83 @@ export async function getInterviewSessionTranscript(sessionId: string): Promise<
 export function interviewSessionWsUrl(sessionId: string): string {
   return `${API_BASE_URL.replace(/^http/, 'ws')}/ws/interview-sessions/${sessionId}`
 }
+
+// ---- Skill profile (GET /skill-profile) ----
+
+export type SkillTrend = 'improving' | 'declining' | 'stable' | 'insufficient_data'
+
+export interface SkillProfileTopicStatOut {
+  topic: string
+  sessions_count: number
+  avg_technical_score: number
+  avg_communication_score: number
+  avg_completeness_score: number
+  trend: SkillTrend
+}
+
+export interface SkillProfileOut {
+  sessions_completed: number
+  overall_avg_technical_score: number | null
+  overall_avg_communication_score: number | null
+  overall_avg_completeness_score: number | null
+  updated_at: string
+  topics: SkillProfileTopicStatOut[]
+}
+
+export async function getSkillProfile(): Promise<SkillProfileOut> {
+  return apiRequest<SkillProfileOut>('/skill-profile')
+}
+
+// ---- Roadmap (GET /roadmap) ----
+
+export type RoadmapPriority = 'high' | 'medium' | 'low'
+export type RoadmapStatus = 'pending' | 'generating' | 'ready' | 'failed'
+
+export interface RoadmapItemResourceOut {
+  resource_id: string
+  title: string | null
+  url: string | null
+  resource_type: string | null
+  score: number
+}
+
+export interface RoadmapItemOut {
+  topic: string
+  gap_description: string
+  priority: RoadmapPriority
+  recommended_action: string
+  resources: RoadmapItemResourceOut[]
+}
+
+export interface RoadmapOut {
+  status: RoadmapStatus
+  summary: string | null
+  strengths: string[] | null
+  growth_areas: string[] | null
+  items: RoadmapItemOut[]
+  error_message: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+export async function getRoadmap(): Promise<RoadmapOut> {
+  return apiRequest<RoadmapOut>('/roadmap')
+}
+
+// ---- Interview session history (GET /interview-sessions) ----
+
+export interface InterviewSessionListItem {
+  session_id: string
+  status: string
+  total_questions: number
+  turns_completed: number
+  avg_technical_score: number | null
+  avg_communication_score: number | null
+  avg_completeness_score: number | null
+  created_at: string
+  completed_at: string | null
+}
+
+export async function listInterviewSessions(): Promise<InterviewSessionListItem[]> {
+  return apiRequest<InterviewSessionListItem[]>('/interview-sessions')
+}

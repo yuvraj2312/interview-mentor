@@ -1,7 +1,7 @@
 import uuid
 
 from arq import ArqRedis
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.deps import get_arq_pool, get_current_user
@@ -10,6 +10,7 @@ from app.models import InterviewPlan, InterviewSession, InterviewTurn, User
 from app.repositories import interview_plan_repository, interview_session_repository
 from app.schemas.interview_session import (
     CreateInterviewSessionRequest,
+    InterviewSessionListItemOut,
     InterviewSessionQuestionOut,
     InterviewSessionStateOut,
     InterviewSessionSummaryOut,
@@ -58,6 +59,32 @@ def _build_summary(session: InterviewSession) -> InterviewSessionSummaryOut:
         avg_completeness_score=sum(t.completeness_score for t in turns) / n,
         difficulty_path=[t.difficulty for t in turns],
     )
+
+
+def _to_list_item(session: InterviewSession) -> InterviewSessionListItemOut:
+    evaluated = [t for t in session.turns if t.technical_score is not None]
+    n = len(evaluated)
+    return InterviewSessionListItemOut(
+        session_id=session.id,
+        status=session.status,
+        total_questions=session.total_questions,
+        turns_completed=n,
+        avg_technical_score=(sum(t.technical_score for t in evaluated) / n) if n else None,
+        avg_communication_score=(sum(t.communication_score for t in evaluated) / n) if n else None,
+        avg_completeness_score=(sum(t.completeness_score for t in evaluated) / n) if n else None,
+        created_at=session.created_at,
+        completed_at=session.completed_at,
+    )
+
+
+@router.get("", response_model=list[InterviewSessionListItemOut])
+def list_interview_sessions(
+    limit: int = Query(50, ge=1, le=200),
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[InterviewSessionListItemOut]:
+    sessions = interview_session_repository.list_for_user(db, current_user.id, limit=limit)
+    return [_to_list_item(s) for s in sessions]
 
 
 @router.post("", response_model=StartInterviewSessionResponse)
