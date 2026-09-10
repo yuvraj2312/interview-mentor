@@ -23,6 +23,16 @@ def get_by_id_for_user(db: DBSession, resume_id: uuid.UUID, user_id: uuid.UUID) 
     return db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
 
 
+def list_for_user(db: DBSession, user_id: uuid.UUID, limit: int = 50) -> list[Resume]:
+    return (
+        db.query(Resume)
+        .filter(Resume.user_id == user_id)
+        .order_by(Resume.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def get_by_id(db: DBSession, resume_id: uuid.UUID) -> Resume | None:
     return db.query(Resume).filter(Resume.id == resume_id).first()
 

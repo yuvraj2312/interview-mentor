@@ -1,16 +1,23 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.deps import get_current_user
 from app.db import get_db
 from app.models import JobDescription, User
 from app.repositories import job_description_repository
-from app.schemas.job_description import CreateJobDescriptionRequest, JobDescriptionOut, JobDescriptionUpdateRequest
+from app.schemas.job_description import (
+    CreateJobDescriptionRequest,
+    JobDescriptionListItemOut,
+    JobDescriptionOut,
+    JobDescriptionUpdateRequest,
+)
 from app.services import job_description_service
 
 router = APIRouter()
+
+_PREVIEW_LENGTH = 160
 
 
 def _get_jd_or_404(db: DBSession, jd_id: uuid.UUID, user_id: uuid.UUID) -> JobDescription:
@@ -30,6 +37,28 @@ def _to_out(jd: JobDescription) -> JobDescriptionOut:
         error_message=jd.error_message,
         created_at=jd.created_at,
     )
+
+
+def _to_list_item(jd: JobDescription) -> JobDescriptionListItemOut:
+    preview = jd.raw_text[:_PREVIEW_LENGTH]
+    if len(jd.raw_text) > _PREVIEW_LENGTH:
+        preview += "…"
+    return JobDescriptionListItemOut(
+        id=jd.id,
+        status=jd.status,
+        raw_text_preview=preview,
+        created_at=jd.created_at,
+    )
+
+
+@router.get("", response_model=list[JobDescriptionListItemOut])
+def list_job_descriptions(
+    limit: int = Query(50, ge=1, le=200),
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[JobDescriptionListItemOut]:
+    jds = job_description_repository.list_for_user(db, current_user.id, limit=limit)
+    return [_to_list_item(jd) for jd in jds]
 
 
 @router.post("", response_model=JobDescriptionOut, status_code=201)

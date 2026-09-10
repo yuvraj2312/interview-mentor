@@ -1,5 +1,49 @@
 @import "tailwindcss";
 
+@theme {
+  /* Ink (navy) — ink-900 matches the previous bg-slate-900 primary exactly */
+  --color-ink-50: #f4f6fb;
+  --color-ink-100: #e7ebf5;
+  --color-ink-200: #cdd5e6;
+  --color-ink-400: #64748b;
+  --color-ink-600: #334155;
+  --color-ink-700: #1e293b;
+  --color-ink-900: #0f172a;
+
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+
+  /* Accent — matches chartPalette's "technical" series so nav/links/focus
+     rings agree visually with the Analytics chart */
+  --color-accent-50: #eef4fd;
+  --color-accent-100: #dbe8fb;
+  --color-accent-500: #2a78d6;
+  --color-accent-600: #1f63b8;
+
+  /* Status — shared source of truth for badges and chartPalette.STATUS_COLORS */
+  --color-success-50: #ecfdf3;
+  --color-success-600: #0ca30c;
+  --color-success-700: #087a09;
+  --color-warning-50: #fffaeb;
+  --color-warning-600: #fab219;
+  --color-warning-700: #92600d;
+  --color-danger-50: #fef2f2;
+  --color-danger-600: #d03b3b;
+  --color-danger-700: #a52c2c;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.07), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 6px 16px -4px rgb(15 23 42 / 0.1), 0 2px 6px -2px rgb(15 23 42 / 0.05);
+}
+
 :root {
   color-scheme: light;
 }
@@ -7,5 +51,7 @@
 body {
   margin: 0;
   min-height: 100svh;
-  color: #0f172a;
+  color: var(--color-ink-900);
+  background-color: var(--color-surface-muted);
+  font-family: var(--font-sans);
 }

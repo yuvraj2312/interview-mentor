@@ -1,14 +1,14 @@
 import uuid
 
 from arq import ArqRedis
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.deps import get_arq_pool, get_current_user
 from app.db import get_db
 from app.models import Resume, User
 from app.repositories import resume_repository
-from app.schemas.resume import ResumeOut, ResumeUpdateRequest
+from app.schemas.resume import ResumeListItemOut, ResumeOut, ResumeUpdateRequest
 from app.services import resume_service
 
 router = APIRouter()
@@ -31,6 +31,25 @@ def _to_out(resume: Resume) -> ResumeOut:
         error_message=resume.error_message,
         created_at=resume.created_at,
     )
+
+
+def _to_list_item(resume: Resume) -> ResumeListItemOut:
+    return ResumeListItemOut(
+        id=resume.id,
+        status=resume.status,
+        original_filename=resume.original_filename,
+        created_at=resume.created_at,
+    )
+
+
+@router.get("", response_model=list[ResumeListItemOut])
+def list_resumes(
+    limit: int = Query(50, ge=1, le=200),
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ResumeListItemOut]:
+    resumes = resume_repository.list_for_user(db, current_user.id, limit=limit)
+    return [_to_list_item(r) for r in resumes]
 
 
 @router.post("", response_model=ResumeOut, status_code=202)

@@ -1,15 +1,11 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { AppLayout } from '@/components/AppLayout'
 import { LoginPage } from '@/pages/Login'
 import { SignupPage } from '@/pages/Signup'
 import { DashboardPage } from '@/pages/Dashboard'
-import { ResumeUploadPage } from '@/pages/ResumeUpload'
-import { ResumeReviewPage } from '@/pages/ResumeReview'
-import { JobDescriptionCreatePage } from '@/pages/JobDescriptionCreate'
-import { JobDescriptionReviewPage } from '@/pages/JobDescriptionReview'
-import { InterviewPlanCreatePage } from '@/pages/InterviewPlanCreate'
-import { InterviewPlanReviewPage } from '@/pages/InterviewPlanReview'
+import { StartInterviewPage } from '@/pages/StartInterview'
 import { LiveInterviewPage } from '@/pages/LiveInterview'
 import { AnalyticsPage } from '@/pages/Analytics'
 import { SessionHistoryPage } from '@/pages/SessionHistory'
@@ -23,18 +19,18 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
-      { path: '/dashboard', element: <DashboardPage /> },
-      { path: '/resumes/upload', element: <ResumeUploadPage /> },
-      { path: '/resumes/:resumeId/review', element: <ResumeReviewPage /> },
-      { path: '/job-descriptions/new', element: <JobDescriptionCreatePage /> },
-      { path: '/job-descriptions/:jdId/review', element: <JobDescriptionReviewPage /> },
-      { path: '/interview-plans/new', element: <InterviewPlanCreatePage /> },
-      { path: '/interview-plans/:planId/review', element: <InterviewPlanReviewPage /> },
-      { path: '/interview-sessions/:sessionId/live', element: <LiveInterviewPage /> },
-      { path: '/interview-sessions/:sessionId', element: <SessionDetailPage /> },
-      { path: '/analytics', element: <AnalyticsPage /> },
-      { path: '/sessions', element: <SessionHistoryPage /> },
-      { path: '/roadmap', element: <RoadmapPage /> },
+      {
+        element: <AppLayout />,
+        children: [
+          { path: '/dashboard', element: <DashboardPage /> },
+          { path: '/start-interview', element: <StartInterviewPage /> },
+          { path: '/interview-sessions/:sessionId/live', element: <LiveInterviewPage /> },
+          { path: '/interview-sessions/:sessionId', element: <SessionDetailPage /> },
+          { path: '/analytics', element: <AnalyticsPage /> },
+          { path: '/sessions', element: <SessionHistoryPage /> },
+          { path: '/roadmap', element: <RoadmapPage /> },
+        ],
+      },
     ],
   },
 ])

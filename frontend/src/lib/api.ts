@@ -150,6 +150,17 @@ export async function updateResume(id: string, structuredData: Record<string, un
   })
 }
 
+export interface ResumeListItem {
+  id: string
+  status: string
+  original_filename: string
+  created_at: string
+}
+
+export async function listResumes(): Promise<ResumeListItem[]> {
+  return apiRequest<ResumeListItem[]>('/resumes')
+}
+
 export async function createJobDescription(rawText: string): Promise<JobDescriptionOut> {
   return apiRequest<JobDescriptionOut>('/job-descriptions', {
     method: 'POST',
@@ -169,6 +180,17 @@ export async function updateJobDescription(
     method: 'PATCH',
     body: JSON.stringify({ structured_data: structuredData }),
   })
+}
+
+export interface JobDescriptionListItem {
+  id: string
+  status: string
+  raw_text_preview: string
+  created_at: string
+}
+
+export async function listJobDescriptions(): Promise<JobDescriptionListItem[]> {
+  return apiRequest<JobDescriptionListItem[]>('/job-descriptions')
 }
 
 export async function computeSkillGap(resumeId: string, jobDescriptionId: string): Promise<SkillGapOut> {

@@ -16,6 +16,16 @@ def get_by_id_for_user(db: DBSession, jd_id: uuid.UUID, user_id: uuid.UUID) -> J
     return db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.user_id == user_id).first()
 
 
+def list_for_user(db: DBSession, user_id: uuid.UUID, limit: int = 50) -> list[JobDescription]:
+    return (
+        db.query(JobDescription)
+        .filter(JobDescription.user_id == user_id)
+        .order_by(JobDescription.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def update_status(
     db: DBSession, jd: JobDescription, *, status: str, error_message: str | None = None
 ) -> JobDescription:

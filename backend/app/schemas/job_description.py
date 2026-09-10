@@ -20,3 +20,10 @@ class JobDescriptionOut(BaseModel):
 
 class JobDescriptionUpdateRequest(BaseModel):
     structured_data: dict
+
+
+class JobDescriptionListItemOut(BaseModel):
+    id: uuid.UUID
+    status: str
+    raw_text_preview: str
+    created_at: datetime

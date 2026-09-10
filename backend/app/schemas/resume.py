@@ -14,5 +14,12 @@ class ResumeOut(BaseModel):
     created_at: datetime
 
 
+class ResumeListItemOut(BaseModel):
+    id: uuid.UUID
+    status: str
+    original_filename: str
+    created_at: datetime
+
+
 class ResumeUpdateRequest(BaseModel):
     structured_data: dict

@@ -88,3 +88,43 @@ def test_patch_resume_rejects_when_not_ready(client):
         headers={"Authorization": f"Bearer {tokens['access_token']}"},
     )
     assert response.status_code == 400
+
+
+def test_list_resumes_empty_for_new_user(client):
+    tokens = signup_and_get_tokens(client)
+    response = client.get("/resumes", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_resumes_requires_auth(client):
+    response = client.get("/resumes")
+    assert response.status_code == 401
+
+
+def test_list_resumes_excludes_other_users_resumes(client):
+    tokens_a = signup_and_get_tokens(client)
+    tokens_b = signup_and_get_tokens(client)
+    _upload_resume(client, tokens_a["access_token"])
+
+    response = client.get("/resumes", headers={"Authorization": f"Bearer {tokens_b['access_token']}"})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_resumes_ordered_newest_first(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+
+    first = _upload_resume(client, access_token).json()
+    second = _upload_resume(client, access_token).json()
+
+    response = client.get("/resumes", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["id"] == second["id"]
+    assert body[1]["id"] == first["id"]
+    assert body[0]["original_filename"] == "resume.docx"
+    assert body[0]["status"] == "uploaded"
+    assert "structured_data" not in body[0]

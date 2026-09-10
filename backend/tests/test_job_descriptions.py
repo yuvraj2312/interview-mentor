@@ -73,3 +73,44 @@ def test_patch_job_description_updates_structured_data(client):
     body = response.json()
     assert body["structured_data"]["seniority_level"] == "mid"
     assert body["low_confidence_fields"] == []
+
+
+def test_list_job_descriptions_empty_for_new_user(client):
+    tokens = signup_and_get_tokens(client)
+    response = client.get("/job-descriptions", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_job_descriptions_requires_auth(client):
+    response = client.get("/job-descriptions")
+    assert response.status_code == 401
+
+
+def test_list_job_descriptions_excludes_other_users_job_descriptions(client):
+    tokens_a = signup_and_get_tokens(client)
+    tokens_b = signup_and_get_tokens(client)
+    _create_jd(client, tokens_a["access_token"])
+
+    response = client.get("/job-descriptions", headers={"Authorization": f"Bearer {tokens_b['access_token']}"})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_job_descriptions_ordered_newest_first_with_preview(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+
+    long_text = "We need a senior Python engineer. " * 10
+    first = _create_jd(client, access_token, raw_text="short jd").json()
+    second = _create_jd(client, access_token, raw_text=long_text).json()
+
+    response = client.get("/job-descriptions", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["id"] == second["id"]
+    assert body[1]["id"] == first["id"]
+    assert body[0]["raw_text_preview"] == long_text[:160] + "…"
+    assert body[1]["raw_text_preview"] == "short jd"
+    assert "raw_text" not in body[0]
