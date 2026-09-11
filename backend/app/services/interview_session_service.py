@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session as DBSession
 
+from app.agents.interviewer import answer_clarification
 from app.core.config import settings
 from app.llm_adapter import get_llm_adapter
 from app.models import InterviewPlan, InterviewSession, InterviewTurn
@@ -54,6 +55,14 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# CE-b: how many clarification exchanges a candidate gets per question
+# before the backend declines and prompts them to just answer.
+CLARIFICATION_LIMIT_PER_QUESTION = 2
+CLARIFICATION_DECLINE_MESSAGE = (
+    "You've used your clarifications for this question - go ahead and answer with your best understanding."
+)
+
+
 def _plan_context(plan: InterviewPlan) -> dict:
     return {
         "candidate_level": plan.candidate_level,
@@ -76,6 +85,7 @@ def _live_question(turn: InterviewTurn) -> LiveQuestion:
         "topic": turn.topic,
         "difficulty": turn.difficulty,
         "question_text": turn.question_text,
+        "clarification_count": 0,
     }
 
 
@@ -214,6 +224,80 @@ def reconcile_stale_sessions(db: DBSession, sessions: list[InterviewSession]) ->
     for session in sessions:
         if session.status not in TERMINAL_STATUSES:
             get_live_state(db, session)
+
+
+def handle_clarification(db: DBSession, *, session: InterviewSession, question: str) -> dict:
+    """Answer a candidate's clarifying question about the CURRENT question.
+
+    A side-channel, not a turn: never calls submit_answer()/the LangGraph,
+    never scores, never touches current_turn_index/topic_queue/InterviewTurn.
+    Capped at CLARIFICATION_LIMIT_PER_QUESTION per question (tracked on
+    LiveQuestion, which already resets every turn advance - see
+    _live_question()). Bypasses build_interview_graph() entirely, so it also
+    bypasses adjust_difficulty_node's cost-cap check - that check is
+    replicated here (against the *pre-call* total, declining for free rather
+    than spending then discarding) so a burst of clarifications still can't
+    blow through the per-session cap. Deliberately does not force the
+    session to "complete" if this call pushes total_cost_usd over the cap:
+    the current turn has no evaluation yet, so _build_summary() would break
+    on it. The bumped total_cost_usd is persisted regardless, so the next
+    real submit_answer() call's existing, unmodified cap check trips there
+    instead - the interview still can't run indefinitely past the cap.
+
+    Returns a dict: {clarification_text, clarifications_used,
+    clarifications_remaining, declined}.
+    """
+    live_state = get_live_state(db, session)
+
+    if live_state["status"] == SessionStatus.COMPLETE.value:
+        raise InterviewSessionCompleteError(session.id)
+    if live_state["status"] == SessionStatus.ABANDONED.value:
+        raise InterviewSessionAbandonedError(session.id)
+
+    current_question = live_state["current_question"]
+    clarifications_used = current_question.get("clarification_count", 0)
+    at_cost_cap = live_state["total_cost_usd"] >= live_state["cost_cap_usd"]
+
+    if clarifications_used >= CLARIFICATION_LIMIT_PER_QUESTION or at_cost_cap:
+        return {
+            "clarification_text": CLARIFICATION_DECLINE_MESSAGE,
+            "clarifications_used": clarifications_used,
+            "clarifications_remaining": max(0, CLARIFICATION_LIMIT_PER_QUESTION - clarifications_used),
+            "declined": True,
+        }
+
+    llm = get_llm_adapter(db, session_id=session.id)
+    result = answer_clarification(
+        llm,
+        topic=current_question["topic"],
+        question_text=current_question["question_text"],
+        difficulty=current_question["difficulty"],
+        clarifying_question=question,
+    )
+
+    cost_delta = llm.last_usage.cost_usd if llm.last_usage else 0.0
+    total_cost_usd = live_state["total_cost_usd"] + cost_delta
+    clarifications_used += 1
+
+    interview_session_repository.bump_cost(db, session, total_cost_usd=total_cost_usd)
+    db.commit()
+    db.refresh(session)
+
+    state_repo.save(
+        {
+            **live_state,
+            "current_question": {**current_question, "clarification_count": clarifications_used},
+            "total_cost_usd": total_cost_usd,
+            "last_activity_at": session.last_activity_at.isoformat(),
+        }
+    )
+
+    return {
+        "clarification_text": result["clarification_text"],
+        "clarifications_used": clarifications_used,
+        "clarifications_remaining": max(0, CLARIFICATION_LIMIT_PER_QUESTION - clarifications_used),
+        "declined": False,
+    }
 
 
 def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> tuple[InterviewSession, InterviewTurn]:

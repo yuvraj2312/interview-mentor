@@ -166,6 +166,33 @@ def _handle_answer(session_id: uuid.UUID, user_id: uuid.UUID, answer_text: str) 
         db.close()
 
 
+def _handle_clarify(session_id: uuid.UUID, user_id: uuid.UUID, question: str) -> dict:
+    db = db_module.SessionLocal()
+    try:
+        session = interview_session_repository.get_by_id_for_user(db, session_id, user_id)
+        result = interview_session_service.handle_clarification(db, session=session, question=question)
+        return {
+            "type": "clarification_result",
+            "question": question,
+            "clarification_text": result["clarification_text"],
+            "clarifications_used": result["clarifications_used"],
+            "clarifications_remaining": result["clarifications_remaining"],
+            "declined": result["declined"],
+        }
+    except InterviewSessionCompleteError:
+        return {"type": "error", "code": "already_complete", "detail": "Interview session is already complete"}
+    except InterviewSessionAbandonedError:
+        return {
+            "type": "error",
+            "code": "abandoned",
+            "detail": "Interview session was abandoned due to inactivity",
+        }
+    except ValueError as exc:
+        return {"type": "error", "code": "llm_error", "detail": f"LLM returned an unusable response: {exc}"}
+    finally:
+        db.close()
+
+
 @router.websocket("/ws/interview-sessions/{session_id}")
 async def interview_session_ws(websocket: WebSocket, session_id: uuid.UUID) -> None:
     await websocket.accept()
@@ -204,9 +231,18 @@ async def interview_session_ws(websocket: WebSocket, session_id: uuid.UUID) -> N
             await websocket.send_json({"type": "error", "code": "bad_request", "detail": "invalid JSON"})
             continue
 
+        if raw.get("type") == "clarify" and isinstance(raw.get("question"), str):
+            message = await asyncio.to_thread(_handle_clarify, session_id, user.id, raw["question"])
+            await websocket.send_json(message)
+            continue
+
         if raw.get("type") != "answer" or not isinstance(raw.get("answer_text"), str):
             await websocket.send_json(
-                {"type": "error", "code": "bad_request", "detail": "expected {type: 'answer', answer_text}"}
+                {
+                    "type": "error",
+                    "code": "bad_request",
+                    "detail": "expected {type: 'answer', answer_text} or {type: 'clarify', question}",
+                }
             )
             continue
 

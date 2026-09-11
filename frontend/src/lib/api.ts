@@ -327,6 +327,19 @@ export interface InterviewAnswerResultMessage {
   stop_reason: InterviewStopReason
 }
 
+// CE-b: a clarification exchange about the CURRENT question - never scored,
+// never advances the turn. declined is true once the per-question limit or
+// the session's cost cap has been reached; clarification_text is still a
+// human-readable message in that case (a fixed decline prompt).
+export interface InterviewClarificationResultMessage {
+  type: 'clarification_result'
+  question: string
+  clarification_text: string
+  clarifications_used: number
+  clarifications_remaining: number
+  declined: boolean
+}
+
 export type InterviewWsErrorCode = 'bad_request' | 'llm_error' | 'inconsistent_state' | 'already_complete' | 'abandoned'
 
 export interface InterviewErrorMessage {
@@ -335,9 +348,16 @@ export interface InterviewErrorMessage {
   detail: string
 }
 
-export type InterviewServerMessage = InterviewStateMessage | InterviewAnswerResultMessage | InterviewErrorMessage
+export type InterviewServerMessage =
+  | InterviewStateMessage
+  | InterviewAnswerResultMessage
+  | InterviewClarificationResultMessage
+  | InterviewErrorMessage
 
-export type InterviewClientMessage = { type: 'auth'; token: string } | { type: 'answer'; answer_text: string }
+export type InterviewClientMessage =
+  | { type: 'auth'; token: string }
+  | { type: 'answer'; answer_text: string }
+  | { type: 'clarify'; question: string }
 
 export async function startInterviewSession(planId: string): Promise<StartInterviewSessionResult> {
   return apiRequest<StartInterviewSessionResult>('/interview-sessions', {

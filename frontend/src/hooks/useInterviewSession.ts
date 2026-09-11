@@ -6,6 +6,7 @@ import {
   getInterviewSessionTranscript,
   interviewSessionWsUrl,
   startInterviewSession,
+  type InterviewClarificationResultMessage,
   type InterviewQuestion,
   type InterviewServerMessage,
   type InterviewStateMessage,
@@ -42,6 +43,9 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
   const [history, setHistory] = useState<InterviewTurnOut[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [clarifications, setClarifications] = useState<InterviewClarificationResultMessage[]>([])
+  const [isAskingClarification, setIsAskingClarification] = useState(false)
+  const [clarificationError, setClarificationError] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -49,6 +53,10 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
   const authRetriedRef = useRef(false)
   const manualCloseRef = useRef(false)
   const pendingAnswerRef = useRef<PendingAnswer | null>(null)
+  // Which action a still-unresolved {"type": "error", ...} reply belongs to -
+  // the WS protocol has one shared error shape for both flows, so this is
+  // what lets the fallback branch below attribute it to the right UI surface.
+  const pendingActionRef = useRef<'answer' | 'clarify' | null>(null)
   const seededRef = useRef(false)
 
   const transcriptQuery = useQuery({
@@ -71,12 +79,29 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
     const ws = new WebSocket(interviewSessionWsUrl(sessionId))
     wsRef.current = ws
 
+    // Every handler below is scoped to this specific `ws` instance via
+    // closure, but StrictMode's dev-only double-invoke (mount -> cleanup ->
+    // mount again) means a socket created by the *first* invocation can be
+    // superseded by a second one before it ever opens. When that first
+    // socket's close event finally arrives (asynchronously - the browser
+    // does not fire it synchronously from cleanup's .close() call), it can
+    // land *after* the second effect run has already reset
+    // manualCloseRef/attemptRef, so onclose's reconnect logic would
+    // misread a stale/aborted socket's close as an unexpected drop of the
+    // still-healthy current connection and schedule a redundant reconnect.
+    // wsRef.current always points at the latest socket, so comparing
+    // against it here is what actually answers "is this the connection we
+    // still care about" - independent of ref-reset ordering.
+    const isCurrent = () => wsRef.current === ws
+
     ws.onopen = () => {
+      if (!isCurrent()) return
       const { accessToken } = useAuthStore.getState()
       ws.send(JSON.stringify({ type: 'auth', token: accessToken }))
     }
 
     ws.onmessage = (event) => {
+      if (!isCurrent()) return
       let message: InterviewServerMessage
       try {
         message = JSON.parse(event.data)
@@ -89,6 +114,7 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
 
       if (message.type === 'state') {
         pendingAnswerRef.current = null
+        pendingActionRef.current = null
         setIsSubmitting(false)
         setState(message)
         return
@@ -108,6 +134,7 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
           setHistory((prev) => [...prev.filter((t) => t.turn_index !== entry.turn_index), entry])
         }
         pendingAnswerRef.current = null
+        pendingActionRef.current = null
         setIsSubmitting(false)
         setSubmitError(null)
         setState((prev) =>
@@ -127,15 +154,31 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
         return
       }
 
+      if (message.type === 'clarification_result') {
+        pendingActionRef.current = null
+        setIsAskingClarification(false)
+        setClarificationError(null)
+        setClarifications((prev) => [...prev, message])
+        return
+      }
+
       // error message
+      const failedAction = pendingActionRef.current
+      pendingActionRef.current = null
       setIsSubmitting(false)
+      setIsAskingClarification(false)
       pendingAnswerRef.current = null
       if (message.code !== 'already_complete' && message.code !== 'abandoned') {
-        setSubmitError(message.detail)
+        if (failedAction === 'clarify') {
+          setClarificationError(message.detail)
+        } else {
+          setSubmitError(message.detail)
+        }
       }
     }
 
     ws.onclose = (event) => {
+      if (!isCurrent()) return
       if (manualCloseRef.current) return
 
       if (event.code === 1000) {
@@ -198,6 +241,10 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
     setState(null)
     setPermanentError(null)
     setHistory([])
+    setClarifications([])
+    setIsAskingClarification(false)
+    setClarificationError(null)
+    pendingActionRef.current = null
 
     connect()
 
@@ -209,15 +256,33 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
     }
   }, [sessionId, connect])
 
+  // A new question always starts with an empty clarification sub-thread.
+  useEffect(() => {
+    setClarifications([])
+    setClarificationError(null)
+  }, [state?.current_question?.turn_index])
+
   const submitAnswer = useCallback(
     (text: string) => {
       if (connectionStatus !== 'open' || !state?.current_question || isSubmitting) return
       pendingAnswerRef.current = { question: state.current_question, answerText: text }
+      pendingActionRef.current = 'answer'
       setIsSubmitting(true)
       setSubmitError(null)
       wsRef.current?.send(JSON.stringify({ type: 'answer', answer_text: text }))
     },
     [connectionStatus, state, isSubmitting],
+  )
+
+  const askClarification = useCallback(
+    (question: string) => {
+      if (connectionStatus !== 'open' || !state?.current_question || isAskingClarification) return
+      pendingActionRef.current = 'clarify'
+      setIsAskingClarification(true)
+      setClarificationError(null)
+      wsRef.current?.send(JSON.stringify({ type: 'clarify', question }))
+    },
+    [connectionStatus, state, isAskingClarification],
   )
 
   const reconnect = useCallback(() => {
@@ -239,6 +304,10 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
     isSubmitting,
     submitError,
     submitAnswer,
+    clarifications,
+    isAskingClarification,
+    clarificationError,
+    askClarification,
     reconnect,
   }
 }

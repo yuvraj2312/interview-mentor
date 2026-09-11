@@ -40,6 +40,9 @@ class LiveQuestion(TypedDict):
     topic: str
     difficulty: int
     question_text: str
+    # CE-b: resets to 0 every time _live_question() rebuilds this on a turn
+    # advance, so the per-question clarification cap naturally resets too.
+    clarification_count: int
 
 
 class LiveSessionState(TypedDict):

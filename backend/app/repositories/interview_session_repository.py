@@ -76,6 +76,17 @@ def advance(
     return session
 
 
+def bump_cost(db: DBSession, session: InterviewSession, *, total_cost_usd: float) -> InterviewSession:
+    # CE-b: persists a clarification's cost outside the normal advance()/
+    # complete() turn lifecycle - current_turn_index/topic_queue/status are
+    # deliberately left untouched.
+    session.total_cost_usd = total_cost_usd
+    session.last_activity_at = datetime.now(timezone.utc)
+    db.add(session)
+    db.flush()
+    return session
+
+
 def complete(
     db: DBSession, session: InterviewSession, *, total_cost_usd: float, stop_reason: str
 ) -> InterviewSession:

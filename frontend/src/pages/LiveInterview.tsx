@@ -6,6 +6,8 @@ import { useInterviewSessionSocket } from '@/hooks/useInterviewSession'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import type { InterviewEvaluation } from '@/lib/api'
@@ -51,14 +53,26 @@ export function LiveInterviewPage() {
     isSubmitting,
     submitError,
     submitAnswer,
+    clarifications,
+    isAskingClarification,
+    clarificationError,
+    askClarification,
     reconnect,
   } = useInterviewSessionSocket(sessionId)
 
   const [answerText, setAnswerText] = useState('')
+  const [clarificationQuestion, setClarificationQuestion] = useState('')
 
   useEffect(() => {
     setAnswerText('')
   }, [history.length])
+
+  useEffect(() => {
+    setClarificationQuestion('')
+  }, [state?.current_question?.turn_index])
+
+  const clarificationsExhausted =
+    clarifications.length > 0 && clarifications[clarifications.length - 1].clarifications_remaining === 0
 
   const isLive =
     !permanentError &&
@@ -171,6 +185,47 @@ export function LiveInterviewPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <p className="text-sm text-ink-900">{state.current_question.question_text}</p>
+
+            <div className="flex flex-col gap-2 border-l-2 border-l-ink-200 pl-4">
+              <Label className="text-xs text-ink-600">
+                Need clarification on this question? This isn't part of your evaluation.
+              </Label>
+
+              {clarifications.map((c, i) => (
+                <div key={i} className="flex flex-col gap-0.5">
+                  <p className="text-xs font-medium text-ink-600">You asked: {c.question}</p>
+                  <p className={c.declined ? 'text-xs text-warning-700' : 'text-xs text-ink-400'}>
+                    {c.clarification_text}
+                  </p>
+                </div>
+              ))}
+
+              {!clarificationsExhausted && (
+                <div className="flex gap-2">
+                  <Input
+                    value={clarificationQuestion}
+                    onChange={(e) => setClarificationQuestion(e.target.value)}
+                    placeholder="Ask about scope, terminology, etc."
+                    className="text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      askClarification(clarificationQuestion)
+                      setClarificationQuestion('')
+                    }}
+                    disabled={
+                      isAskingClarification || connectionStatus !== 'open' || !clarificationQuestion.trim()
+                    }
+                  >
+                    {isAskingClarification ? 'Asking…' : 'Ask for clarification'}
+                  </Button>
+                </div>
+              )}
+              {clarificationError && <p className="text-xs text-danger-600">{clarificationError}</p>}
+            </div>
+
             <Textarea
               value={answerText}
               onChange={(e) => setAnswerText(e.target.value)}
