@@ -161,6 +161,10 @@ export async function listResumes(): Promise<ResumeListItem[]> {
   return apiRequest<ResumeListItem[]>('/resumes')
 }
 
+export async function deleteResume(id: string): Promise<void> {
+  return apiRequest<void>(`/resumes/${id}`, { method: 'DELETE' })
+}
+
 export async function createJobDescription(rawText: string): Promise<JobDescriptionOut> {
   return apiRequest<JobDescriptionOut>('/job-descriptions', {
     method: 'POST',
@@ -191,6 +195,10 @@ export interface JobDescriptionListItem {
 
 export async function listJobDescriptions(): Promise<JobDescriptionListItem[]> {
   return apiRequest<JobDescriptionListItem[]>('/job-descriptions')
+}
+
+export async function deleteJobDescription(id: string): Promise<void> {
+  return apiRequest<void>(`/job-descriptions/${id}`, { method: 'DELETE' })
 }
 
 export async function computeSkillGap(resumeId: string, jobDescriptionId: string): Promise<SkillGapOut> {
@@ -420,6 +428,7 @@ export interface InterviewSessionListItem {
   avg_completeness_score: number | null
   created_at: string
   completed_at: string | null
+  last_activity_at: string
 }
 
 export async function listInterviewSessions(): Promise<InterviewSessionListItem[]> {

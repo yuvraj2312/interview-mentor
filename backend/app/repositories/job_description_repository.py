@@ -1,8 +1,13 @@
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session as DBSession
 
 from app.models import JobDescription
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def create(db: DBSession, *, user_id: uuid.UUID, raw_text: str) -> JobDescription:
@@ -19,7 +24,7 @@ def get_by_id_for_user(db: DBSession, jd_id: uuid.UUID, user_id: uuid.UUID) -> J
 def list_for_user(db: DBSession, user_id: uuid.UUID, limit: int = 50) -> list[JobDescription]:
     return (
         db.query(JobDescription)
-        .filter(JobDescription.user_id == user_id)
+        .filter(JobDescription.user_id == user_id, JobDescription.deleted_at.is_(None))
         .order_by(JobDescription.created_at.desc())
         .limit(limit)
         .all()
@@ -41,6 +46,13 @@ def update_structured_data(
 ) -> JobDescription:
     jd.structured_data = structured_data
     jd.low_confidence_fields = low_confidence_fields if low_confidence_fields is not None else []
+    db.add(jd)
+    db.flush()
+    return jd
+
+
+def soft_delete(db: DBSession, jd: JobDescription) -> JobDescription:
+    jd.deleted_at = _now()
     db.add(jd)
     db.flush()
     return jd

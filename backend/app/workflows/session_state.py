@@ -48,7 +48,8 @@ class LiveSessionState(TypedDict):
     turn_index: int
     total_questions: int
     current_difficulty: int
-    topic_queue: list[str]
+    # CE-a: each entry is {"topic": str, "project": dict | None}.
+    topic_queue: list[dict]
     asked_questions: list[str]
     current_question: LiveQuestion | None
     last_activity_at: str  # ISO 8601 UTC

@@ -88,7 +88,7 @@ interview-mentor/
 - **All LLM/agent calls must be traced** (prompt, response, latency, token cost) from Phase 4 onward — required for both cost control and quality auditing, not optional instrumentation.
 - **Resume files never go in PostgreSQL** — original files go to object storage; only extracted text/metadata is relational. This was an explicit fix from v1.
 - **Hallucination scoring and hiring-probability scoring are deferred (Could-have)** — they require labeled/calibration data that won't exist at launch. Don't build these speculatively.
-- Voice mode, whiteboard/system-design canvas mode, multi-language support, and enterprise/B2B features are explicitly **out of scope** until Phase 8+.
+- Voice mode, whiteboard/system-design canvas mode, multi-language support, and enterprise/B2B features are explicitly **out of scope** until Phase 9+.
 
 ## Delivery sequencing
 

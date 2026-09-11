@@ -1,4 +1,4 @@
-import { BarChart3, ListChecks, Map, Rocket } from 'lucide-react'
+import { BarChart3, Eye, ListChecks, Map, Rocket, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { ResourceStatusBadge } from '@/components/ResourceStatusBadge'
@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useInterviewSessions } from '@/hooks/useInterviewSessions'
 import { useJobDescriptions } from '@/hooks/useJobDescriptions'
+import { useDeleteJobDescription } from '@/hooks/useJobDescription'
 import { useResumes } from '@/hooks/useResumes'
+import { useDeleteResume } from '@/hooks/useResume'
 import { formatDate } from '@/lib/format'
 
 const RECENT_LIMIT = 5
@@ -23,6 +25,20 @@ export function DashboardPage() {
   const resumesQuery = useResumes()
   const jdsQuery = useJobDescriptions()
   const sessionsQuery = useInterviewSessions()
+  const deleteResume = useDeleteResume()
+  const deleteJobDescription = useDeleteJobDescription()
+
+  function handleDeleteResume(id: string, filename: string) {
+    if (window.confirm(`Delete "${filename}"? Existing plans and sessions built from it will be unaffected.`)) {
+      deleteResume.mutate(id)
+    }
+  }
+
+  function handleDeleteJobDescription(id: string) {
+    if (window.confirm('Delete this job description? Existing plans and sessions built from it will be unaffected.')) {
+      deleteJobDescription.mutate(id)
+    }
+  }
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-16">
@@ -58,7 +74,23 @@ export function DashboardPage() {
                   <p className="truncate text-sm text-ink-900">{resume.original_filename}</p>
                   <p className="text-xs text-ink-400">{formatDate(resume.created_at)}</p>
                 </div>
-                <ResourceStatusBadge status={resume.status} />
+                <div className="flex shrink-0 items-center gap-1">
+                  <ResourceStatusBadge status={resume.status} />
+                  <Button asChild variant="ghost" size="sm" className="size-8 p-0">
+                    <Link to={`/resumes/${resume.id}`} aria-label="View resume">
+                      <Eye className="size-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-8 p-0"
+                    aria-label="Delete resume"
+                    onClick={() => handleDeleteResume(resume.id, resume.original_filename)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -84,7 +116,23 @@ export function DashboardPage() {
                   <p className="truncate text-sm text-ink-900">{jd.raw_text_preview}</p>
                   <p className="text-xs text-ink-400">{formatDate(jd.created_at)}</p>
                 </div>
-                <ResourceStatusBadge status={jd.status} />
+                <div className="flex shrink-0 items-center gap-1">
+                  <ResourceStatusBadge status={jd.status} />
+                  <Button asChild variant="ghost" size="sm" className="size-8 p-0">
+                    <Link to={`/job-descriptions/${jd.id}`} aria-label="View job description">
+                      <Eye className="size-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-8 p-0"
+                    aria-label="Delete job description"
+                    onClick={() => handleDeleteJobDescription(jd.id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </CardContent>

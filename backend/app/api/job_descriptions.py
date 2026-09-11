@@ -99,3 +99,14 @@ def update_job_description(
     db.commit()
     db.refresh(jd)
     return _to_out(jd)
+
+
+@router.delete("/{jd_id}", status_code=204)
+def delete_job_description(
+    jd_id: uuid.UUID,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    jd = _get_jd_or_404(db, jd_id, current_user.id)
+    job_description_repository.soft_delete(db, jd)
+    db.commit()

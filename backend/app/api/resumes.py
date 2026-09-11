@@ -96,3 +96,14 @@ def update_resume(
     db.commit()
     db.refresh(resume)
     return _to_out(resume)
+
+
+@router.delete("/{resume_id}", status_code=204)
+def delete_resume(
+    resume_id: uuid.UUID,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    resume = _get_resume_or_404(db, resume_id, current_user.id)
+    resume_repository.soft_delete(db, resume)
+    db.commit()

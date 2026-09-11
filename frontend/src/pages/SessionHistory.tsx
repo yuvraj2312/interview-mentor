@@ -6,12 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useInterviewSessions } from '@/hooks/useInterviewSessions'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatDateTime, formatRelativeTime } from '@/lib/format'
 import type { InterviewSessionListItem } from '@/lib/api'
 
 function formatScore(value: number | null): string {
   return value === null ? '—' : value.toFixed(1)
 }
+
+const LIVE_STATUSES = new Set(['in_progress', 'evaluating', 'advancing'])
 
 export function SessionHistoryPage() {
   const sessionsQuery = useInterviewSessions()
@@ -56,6 +58,7 @@ export function SessionHistoryPage() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Last activity</TableHead>
                   <TableHead>Questions</TableHead>
                   <TableHead>Technical</TableHead>
                   <TableHead>Communication</TableHead>
@@ -67,11 +70,20 @@ export function SessionHistoryPage() {
                   <TableRow
                     key={session.session_id}
                     className="cursor-pointer"
-                    onClick={() => navigate(`/interview-sessions/${session.session_id}`)}
+                    onClick={() =>
+                      navigate(
+                        LIVE_STATUSES.has(session.status)
+                          ? `/interview-sessions/${session.session_id}/live`
+                          : `/interview-sessions/${session.session_id}`,
+                      )
+                    }
                   >
                     <TableCell>{formatDate(session.created_at)}</TableCell>
                     <TableCell>
                       <SessionStatusBadge status={session.status} />
+                    </TableCell>
+                    <TableCell title={formatDateTime(session.last_activity_at)}>
+                      {formatRelativeTime(session.last_activity_at)}
                     </TableCell>
                     <TableCell>
                       {session.turns_completed} / {session.total_questions}

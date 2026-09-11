@@ -74,6 +74,7 @@ def _to_list_item(session: InterviewSession) -> InterviewSessionListItemOut:
         avg_completeness_score=(sum(t.completeness_score for t in evaluated) / n) if n else None,
         created_at=session.created_at,
         completed_at=session.completed_at,
+        last_activity_at=session.last_activity_at,
     )
 
 
@@ -84,6 +85,7 @@ def list_interview_sessions(
     current_user: User = Depends(get_current_user),
 ) -> list[InterviewSessionListItemOut]:
     sessions = interview_session_repository.list_for_user(db, current_user.id, limit=limit)
+    interview_session_service.reconcile_stale_sessions(db, sessions)
     return [_to_list_item(s) for s in sessions]
 
 

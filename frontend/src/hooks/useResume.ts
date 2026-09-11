@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { getResume, updateResume, uploadResume } from '@/lib/api'
+import { deleteResume, getResume, updateResume, uploadResume } from '@/lib/api'
 
 const PROCESSING_STATUSES = new Set(['uploaded', 'parsing', 'analyzing'])
 
@@ -25,6 +25,16 @@ export function useUpdateResume(id: string) {
     mutationFn: (structuredData: Record<string, unknown>) => updateResume(id, structuredData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resume', id] })
+    },
+  })
+}
+
+export function useDeleteResume() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteResume(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resumes'] })
     },
   })
 }

@@ -26,6 +26,7 @@ from app.repositories import interview_session_state_repository as state_repo
 from app.services import skill_profile_service
 from app.workflows.interview_graph import build_interview_graph
 from app.workflows.session_state import (
+    TERMINAL_STATUSES,
     LiveQuestion,
     LiveSessionState,
     SessionStatus,
@@ -61,8 +62,12 @@ def _plan_context(plan: InterviewPlan) -> dict:
     }
 
 
-def _topic_queue_from_mix(topic_mix: list) -> list[str]:
-    return [topic["topic"] for topic in topic_mix for _ in range(topic["question_count"])]
+def _topic_queue_from_mix(topic_mix: list) -> list[dict]:
+    return [
+        {"topic": entry["topic"], "project": entry.get("project") if entry.get("grounded_in_project") else None}
+        for entry in topic_mix
+        for _ in range(entry["question_count"])
+    ]
 
 
 def _live_question(turn: InterviewTurn) -> LiveQuestion:
@@ -81,7 +86,7 @@ def _state_blob(
     turn_index: int,
     total_questions: int,
     current_difficulty: int,
-    topic_queue: list[str],
+    topic_queue: list[dict],
     asked_questions: list[str],
     current_question: LiveQuestion | None,
     last_activity_at: datetime,
@@ -199,6 +204,16 @@ def get_live_state(db: DBSession, session: InterviewSession) -> LiveSessionState
         return {**state, "status": SessionStatus.ABANDONED.value}
 
     return state
+
+
+def reconcile_stale_sessions(db: DBSession, sessions: list[InterviewSession]) -> None:
+    """Run the check-on-access abandonment check for every non-terminal
+    session in a list result, so a stale IN_PROGRESS session flips to
+    ABANDONED as soon as it's viewed in a list, not only when its own
+    state/WS endpoint is opened directly (see get_live_state())."""
+    for session in sessions:
+        if session.status not in TERMINAL_STATUSES:
+            get_live_state(db, session)
 
 
 def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> tuple[InterviewSession, InterviewTurn]:

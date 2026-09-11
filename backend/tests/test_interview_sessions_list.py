@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from app.core.config import settings
 from tests.conftest import signup_and_get_tokens
 from tests.test_interview_sessions import _fake_generate_question, _ready_plan, _score, _start_session
 
@@ -44,6 +45,7 @@ def test_list_sessions_null_scores_before_any_answer(client):
     assert item["avg_communication_score"] is None
     assert item["avg_completeness_score"] is None
     assert item["completed_at"] is None
+    assert item["last_activity_at"] is not None
 
 
 def test_list_sessions_ordered_newest_first_with_averaged_scores(client):
@@ -79,3 +81,20 @@ def test_list_sessions_ordered_newest_first_with_averaged_scores(client):
     assert body[0]["turns_completed"] == 2
     assert body[0]["avg_technical_score"] == 7.0
     assert body[1]["session_id"] == start_1["session_id"]
+
+
+def test_list_sessions_flips_stale_in_progress_to_abandoned(client, monkeypatch):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)
+    start = _start_session(client, access_token, plan["id"])
+
+    monkeypatch.setattr(settings, "interview_session_inactivity_timeout_seconds", -1)
+
+    response = client.get("/interview-sessions", headers={"Authorization": f"Bearer {access_token}"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["session_id"] == start["session_id"]
+    assert body[0]["status"] == "abandoned"
+    assert body[0]["last_activity_at"] is not None

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useBlocker, useParams } from 'react-router-dom'
 
 import { useInterviewSessionSocket } from '@/hooks/useInterviewSession'
 import { Button } from '@/components/ui/button'
@@ -60,6 +60,23 @@ export function LiveInterviewPage() {
     setAnswerText('')
   }, [history.length])
 
+  const isLive =
+    !permanentError &&
+    state !== null &&
+    (state.status === 'in_progress' || state.status === 'evaluating' || state.status === 'advancing')
+
+  useEffect(() => {
+    if (!isLive) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isLive])
+
+  const blocker = useBlocker(isLive)
+
   if (permanentError) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-16">
@@ -97,6 +114,22 @@ export function LiveInterviewPage() {
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
+      {blocker.state === 'blocked' && (
+        <Card className="border-l-4 border-l-warning-600">
+          <CardHeader>
+            <CardTitle>Leave interview?</CardTitle>
+            <CardDescription>
+              If you leave now, this session will be marked abandoned after a period of inactivity.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex gap-2">
+            <Button variant="outline" onClick={() => blocker.reset()}>
+              Stay
+            </Button>
+            <Button onClick={() => blocker.proceed()}>Leave</Button>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <p className="text-sm text-ink-600">

@@ -141,7 +141,7 @@ exist at launch.
 
 - Analytics dashboard for candidates (skill radar, progress charts).
 
-4.3 Out of Scope — Deferred (Phase 8+, requires post-launch validation)
+4.3 Out of Scope — Deferred (Phase 9+, requires post-launch validation)
 
 - Voice-based interview mode (speech-to-text/text-to-speech pipeline).
 
@@ -487,8 +487,9 @@ are built out.
 | Phase 5 — Evaluation Pipeline              | Multi-dimensional scoring, rubric consistency checks.                                     | Evaluation-human agreement meets target KPI on sample audit.           |
 | Phase 6 — Session Memory & Roadmap         | Cross-session skill tracking, roadmap generation/updates.                                 | Roadmap updates correctly after a second session.                      |
 | Phase 7 — Analytics Dashboard              | Skill radar, progress charts, session history UI.                                         | Dashboard reflects accurate historical data.                           |
-| Phase 8 — Voice, Coding & Whiteboard Modes | Additional interview modalities.                                                          | Each modality passes its own acceptance test independent of core loop. |
-| Phase 9 — Production Hardening             | Load testing, cost controls, security review, observability.                              | NFR targets met under simulated production load.                       |
+| Phase 8 — Conversational Interview Engine (CE-a/b/c) | Layer richer, more natural conversation onto the existing Q&A loop before new modalities are added: project-grounded questions (CE-a), candidate-initiated clarification exchanges (CE-b), interviewer-initiated follow-up questions (CE-c). | CE-a: generated questions concretely reference the candidate's actual resume projects when available, with graceful fallback to none. CE-b/c: each sub-phase passes its own acceptance test before the next begins. |
+| Phase 9 — Voice, Coding & Whiteboard Modes | Additional interview modalities.                                                          | Each modality passes its own acceptance test independent of core loop. |
+| Phase 10 — Production Hardening            | Load testing, cost controls, security review, observability.                              | NFR targets met under simulated production load.                       |
 
 18\. Technology Stack
 

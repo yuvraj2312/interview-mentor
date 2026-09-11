@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { createJobDescription, getJobDescription, updateJobDescription } from '@/lib/api'
+import { createJobDescription, deleteJobDescription, getJobDescription, updateJobDescription } from '@/lib/api'
 
 export function useCreateJobDescription() {
   return useMutation({
@@ -22,6 +22,16 @@ export function useUpdateJobDescription(id: string) {
     mutationFn: (structuredData: Record<string, unknown>) => updateJobDescription(id, structuredData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job-description', id] })
+    },
+  })
+}
+
+export function useDeleteJobDescription() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteJobDescription(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['job-descriptions'] })
     },
   })
 }

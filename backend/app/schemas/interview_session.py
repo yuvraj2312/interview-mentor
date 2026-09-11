@@ -76,6 +76,7 @@ class InterviewSessionListItemOut(BaseModel):
     avg_completeness_score: float | None
     created_at: datetime
     completed_at: datetime | None
+    last_activity_at: datetime
 
 
 class InterviewSessionStateOut(BaseModel):

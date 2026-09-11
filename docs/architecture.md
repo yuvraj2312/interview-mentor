@@ -260,8 +260,9 @@ has concrete states and transitions:
 | Phase 5 — Evaluation Pipeline              | Multi-dimensional scoring, rubric consistency checks.                                                              | Unchanged                                                                                       |
 | Phase 6 — Session Memory & Roadmap         | Cross-session skill tracking, roadmap generation/updates.                                                          | Unchanged                                                                                       |
 | Phase 7 — Analytics Dashboard              | Skill radar, progress charts, session history UI.                                                                  | Unchanged                                                                                       |
-| Phase 8 — Voice, Coding & Whiteboard Modes | Additional interview modalities.                                                                                   | Explicitly deferred until after core loop validation                                            |
-| Phase 9 — Production Hardening             | Load testing, cost controls, security review, observability.                                                       | Unchanged                                                                                       |
+| Phase 8 — Conversational Interview Engine (CE-a/b/c) | Layer richer, more natural conversation onto the existing Q&A loop before new modalities are added: project-grounded questions (CE-a), candidate-initiated clarification exchanges (CE-b), interviewer-initiated follow-up questions (CE-c). | (new) — inserted ahead of the modality phases so the core conversation is richer before new modalities are added |
+| Phase 9 — Voice, Coding & Whiteboard Modes | Additional interview modalities.                                                                                   | Explicitly deferred until after core loop validation; renumbered from Phase 8                   |
+| Phase 10 — Production Hardening            | Load testing, cost controls, security review, observability.                                                       | Renumbered from Phase 9                                                                          |
 
 > **Note (Phase 6a, resolved):** Phase 2's skill-gap comparison (`backend/app/services/skill_gap_service.py`)
 > used to do exact-string matching only, which missed synonyms and related skills (e.g. "JS"/"JavaScript",
@@ -293,7 +294,7 @@ has concrete states and transitions:
 > testing it with the same rigor: real positive/negative topic-phrase pairs, checked for a threshold that
 > actually separates them, not an assumed extension of the 6a threshold.
 
-> **Note (Phase 9 hardening item):** The Phase 5 evaluator human-audit (`docs/phase5_evaluation_audit.md`)
+> **Note (Phase 10 hardening item):** The Phase 5 evaluator human-audit (`docs/phase5_evaluation_audit.md`)
 > surfaced that a long, multi-part question can occasionally make the LLM deviate from the required JSON
 > response shape (e.g. splitting one rationale across several `*_score_rationale` keys, or trailing the
 > closing fence with stray characters). Both known triggers were fixed at the prompt/parsing level
@@ -303,7 +304,7 @@ has concrete states and transitions:
 > (`backend/app/llm_adapter.py`) still has no retry on a malformed response; a single bad parse still surfaces
 > as a 502 to the candidate mid-interview. A one-retry-on-malformed-JSON safety net in the adapter layer -
 > shared by every agent, not just the evaluator - is worthwhile resilience-under-rare-failure work for
-> Phase 9 (Production Hardening).
+> Phase 10 (Production Hardening).
 
 12\. Recommended Starting Point
 

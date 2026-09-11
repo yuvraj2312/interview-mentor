@@ -114,3 +114,42 @@ def test_list_job_descriptions_ordered_newest_first_with_preview(client):
     assert body[0]["raw_text_preview"] == long_text[:160] + "…"
     assert body[1]["raw_text_preview"] == "short jd"
     assert "raw_text" not in body[0]
+
+
+def test_delete_job_description_requires_auth(client):
+    tokens = signup_and_get_tokens(client)
+    created = _create_jd(client, tokens["access_token"]).json()
+    response = client.delete(f"/job-descriptions/{created['id']}")
+    assert response.status_code == 401
+
+
+def test_delete_job_description_hides_it_from_list_but_get_by_id_still_works(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    created = _create_jd(client, access_token).json()
+
+    response = client.delete(
+        f"/job-descriptions/{created['id']}", headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 204
+
+    list_response = client.get("/job-descriptions", headers={"Authorization": f"Bearer {access_token}"})
+    assert list_response.json() == []
+
+    get_response = client.get(
+        f"/job-descriptions/{created['id']}", headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == created["id"]
+
+
+def test_delete_job_description_is_scoped_to_owner(client):
+    tokens_a = signup_and_get_tokens(client)
+    tokens_b = signup_and_get_tokens(client)
+    created = _create_jd(client, tokens_a["access_token"]).json()
+
+    response = client.delete(
+        f"/job-descriptions/{created['id']}",
+        headers={"Authorization": f"Bearer {tokens_b['access_token']}"},
+    )
+    assert response.status_code == 404

@@ -17,6 +17,31 @@ WIDE_PLAN_FAKE_RESULT = {
     "rationale": "Wide range to exercise adaptive difficulty trending.",
 }
 
+# CE-a: a plan whose topic_mix already carries the Interview Planner's
+# grounded_in_project tagging, for testing that it survives topic_mix ->
+# topic_queue -> generate_question end to end (the tagging logic itself is
+# unit-tested against the real agent in test_interview_planner_agent.py).
+GROUNDED_PLAN_FAKE_RESULT = {
+    "candidate_level": "mid",
+    "topic_mix": [
+        {"topic": "Python fundamentals", "question_count": 2, "grounded_in_project": False, "project": None},
+        {
+            "topic": "Order Pipeline — project deep-dive",
+            "question_count": 1,
+            "grounded_in_project": True,
+            "project": {
+                "name": "Order Pipeline",
+                "description": "Async order processing service.",
+                "technologies": ["Python", "Kafka"],
+            },
+        },
+        {"topic": "System design", "question_count": 2, "grounded_in_project": False, "project": None},
+    ],
+    "difficulty_min": 1,
+    "difficulty_max": 5,
+    "rationale": "Includes one project-grounded slot.",
+}
+
 
 def _ready_plan(client, access_token):
     resume_id = _upload_and_ready_resume(client, access_token)
@@ -32,7 +57,7 @@ def _ready_plan(client, access_token):
     return response.json()
 
 
-def _fake_generate_question(llm, *, topic, difficulty, candidate_level, asked_questions):
+def _fake_generate_question(llm, *, topic, difficulty, candidate_level, asked_questions, project=None):
     return {"question_text": f"Question #{len(asked_questions)} on {topic} (d{difficulty})"}
 
 
@@ -210,6 +235,47 @@ def test_generate_question_receives_growing_asked_questions_list_and_no_duplicat
     # the last (longest) asked_questions list carries every prior question exactly once - no duplicates accrued
     final_asked_questions = spy.call_args_list[-1].kwargs["asked_questions"]
     assert len(final_asked_questions) == len(set(final_asked_questions))
+
+
+def test_generate_question_receives_project_only_for_the_grounded_slot(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    resume_id = _upload_and_ready_resume(client, access_token)
+    jd = _create_ready_jd(client, access_token)
+    skill_gap = _compute_skill_gap(client, access_token, resume_id, jd["id"])
+    with patch(
+        "app.services.interview_plan_service.generate_interview_plan", return_value=GROUNDED_PLAN_FAKE_RESULT
+    ):
+        plan = client.post(
+            "/interview-plans",
+            json={"skill_gap_analysis_id": skill_gap["id"], "format": "quick"},
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).json()
+
+    spy = MagicMock(side_effect=_fake_generate_question)
+    with patch("app.workflows.interview_graph.generate_question", spy):
+        start = client.post(
+            "/interview-sessions",
+            json={"interview_plan_id": plan["id"]},
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).json()
+    session_id = start["session_id"]
+
+    scores = [_score(9.5) for _ in range(4)]
+    with patch("app.workflows.interview_graph.generate_question", spy), patch(
+        "app.workflows.interview_graph.evaluate_answer", side_effect=scores
+    ):
+        for _ in range(4):
+            client.post(
+                f"/interview-sessions/{session_id}/answer",
+                json={"answer_text": "strong answer"},
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+
+    projects_received = [call.kwargs["project"] for call in spy.call_args_list]
+    # topic_queue order matches topic_mix order: 2 ungrounded, then the 1
+    # grounded slot, then 2 more ungrounded.
+    assert projects_received == [None, None, {"name": "Order Pipeline", "description": "Async order processing service.", "technologies": ["Python", "Kafka"]}, None, None]
 
 
 def test_start_session_requires_ready_plan(client):

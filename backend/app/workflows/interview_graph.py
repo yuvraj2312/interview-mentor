@@ -41,7 +41,9 @@ class InterviewGraphState(TypedDict):
     action: Literal["start", "answer"]
     plan: InterviewPlanContext
     asked_questions: list[str]
-    topic_queue: list[str]
+    # CE-a: each entry is {"topic": str, "project": dict | None} - project is
+    # non-None only for a slot the Interview Planner tagged grounded_in_project.
+    topic_queue: list[dict]
     current_difficulty: int
     turn_index: int
     total_questions: int
@@ -76,18 +78,19 @@ def _route_after_adjust(state: InterviewGraphState) -> str:
 def build_interview_graph(llm: LLMAdapter):
     def generate_question_node(state: InterviewGraphState) -> dict:
         topic_queue = list(state["topic_queue"])
-        topic = topic_queue.pop(0)
+        entry = topic_queue.pop(0)
         result = generate_question(
             llm,
-            topic=topic,
+            topic=entry["topic"],
             difficulty=state["current_difficulty"],
             candidate_level=state["plan"]["candidate_level"],
             asked_questions=state["asked_questions"],
+            project=entry.get("project"),
         )
         cost_delta = llm.last_usage.cost_usd if llm.last_usage else 0.0
         return {
             "topic_queue": topic_queue,
-            "next_topic": topic,
+            "next_topic": entry["topic"],
             "next_question_text": result["question_text"],
             "accumulated_cost_usd": state["accumulated_cost_usd"] + cost_delta,
         }

@@ -5,6 +5,8 @@ import { AppLayout } from '@/components/AppLayout'
 import { LoginPage } from '@/pages/Login'
 import { SignupPage } from '@/pages/Signup'
 import { DashboardPage } from '@/pages/Dashboard'
+import { ResumeDetailPage } from '@/pages/ResumeDetail'
+import { JobDescriptionDetailPage } from '@/pages/JobDescriptionDetail'
 import { StartInterviewPage } from '@/pages/StartInterview'
 import { LiveInterviewPage } from '@/pages/LiveInterview'
 import { AnalyticsPage } from '@/pages/Analytics'
@@ -23,6 +25,8 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
+          { path: '/resumes/:resumeId', element: <ResumeDetailPage /> },
+          { path: '/job-descriptions/:jdId', element: <JobDescriptionDetailPage /> },
           { path: '/start-interview', element: <StartInterviewPage /> },
           { path: '/interview-sessions/:sessionId/live', element: <LiveInterviewPage /> },
           { path: '/interview-sessions/:sessionId', element: <SessionDetailPage /> },
