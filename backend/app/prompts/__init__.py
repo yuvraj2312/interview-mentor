@@ -10,6 +10,7 @@ from app.prompts.question_generator_prompts import (
     QUESTION_GENERATOR_PROMPT,
 )
 from app.prompts.resume_prompts import RESUME_ANALYSIS_PROMPT
+from app.prompts.skill_matcher_prompts import SKILL_MATCH_PROMPT
 
 __all__ = [
     "ADAPTIVE_EVALUATION_PROMPT",
@@ -23,4 +24,5 @@ __all__ = [
     "QUESTION_GENERATION_PROMPT",
     "QUESTION_GENERATOR_PROMPT",
     "RESUME_ANALYSIS_PROMPT",
+    "SKILL_MATCH_PROMPT",
 ]

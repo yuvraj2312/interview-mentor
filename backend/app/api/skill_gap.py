@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.core.deps import get_current_user
 from app.db import get_db
 from app.embedding_adapter import get_embedding_adapter
+from app.llm_adapter import get_llm_adapter
 from app.models import SkillGapAnalysis, User
 from app.repositories import job_description_repository, resume_repository, skill_gap_repository
 from app.schemas.skill_gap import ComputeSkillGapRequest, SkillGapOut
@@ -45,7 +46,7 @@ def compute_skill_gap(
     if jd.status != "ready":
         raise HTTPException(status_code=400, detail="Job description is not ready")
 
-    result = skill_gap_service.compute(resume, jd, get_embedding_adapter())
+    result = skill_gap_service.compute(resume, jd, get_embedding_adapter(), get_llm_adapter(db))
     analysis = skill_gap_repository.create(
         db,
         user_id=current_user.id,

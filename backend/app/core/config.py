@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     embedding_model_name: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = 384
     skill_match_similarity_threshold: float = 0.85
+    # Cost-control tripwire only, NOT a confidence boundary like the
+    # threshold above - calibration (see skill_gap_service.py's
+    # _llm_fallback_pass docstring) found cosine similarity in this range
+    # is not separable between "unrelated" and "same skill, different
+    # words" for short professional-skill phrases (a real synonym pair can
+    # score lower than a maximally-unrelated pair). Set low so it
+    # essentially never excludes a real match; the LLM fallback layer does
+    # the actual discrimination for everything above it.
+    skill_match_ambiguous_floor: float = 0.35
     skill_trend_delta_threshold: float = 0.5
     learning_resource_similarity_threshold: float = 0.3
 

@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from app.embedding_adapter import get_embedding_adapter
+from app.llm_adapter import LLMAdapter
 from app.models import JobDescription, Resume
 from app.services import skill_gap_service
 from tests.conftest import signup_and_get_tokens
@@ -17,13 +18,31 @@ JD_FAKE_ANALYSIS = {
 _embedding_adapter = get_embedding_adapter()
 
 
+class _AlwaysNoLLM(LLMAdapter):
+    """Scripted LLM fallback double for tests below that predate layer 4 and
+    don't care about it: always says "not a match," which exactly
+    reproduces each test's pre-layer-4 outcome for any pair that reaches
+    the ambiguous band (before this layer existed, such a pair simply
+    stayed below the embedding threshold and was left missing - the same
+    result "the LLM says no" produces).
+    """
+
+    last_usage = None
+
+    def generate(self, prompt, *, agent_name, temperature=0.7, max_tokens=1024):
+        return '{"is_match": false, "rationale": "scripted: always no"}'
+
+
+_always_no_llm = _AlwaysNoLLM()
+
+
 def test_compute_pure_function():
     resume = Resume(structured_data={"skills": ["Python", "FastAPI", "Docker"]})
     jd = JobDescription(
         structured_data={"required_skills": ["Python", "PostgreSQL"], "preferred_skills": ["Docker", "Kubernetes"]}
     )
 
-    result = skill_gap_service.compute(resume, jd, _embedding_adapter)
+    result = skill_gap_service.compute(resume, jd, _embedding_adapter, _always_no_llm)
 
     assert set(result["matched_skills"]) == {"Python", "Docker"}
     assert result["missing_required_skills"] == ["PostgreSQL"]
@@ -35,7 +54,7 @@ def test_compute_handles_no_requirements():
     resume = Resume(structured_data={"skills": ["Python"]})
     jd = JobDescription(structured_data={"required_skills": [], "preferred_skills": []})
 
-    result = skill_gap_service.compute(resume, jd, _embedding_adapter)
+    result = skill_gap_service.compute(resume, jd, _embedding_adapter, _always_no_llm)
 
     assert result["match_score"] == 0.0
 
@@ -46,7 +65,7 @@ def test_compute_matches_js_javascript():
     resume = Resume(structured_data={"skills": ["JS"]})
     jd = JobDescription(structured_data={"required_skills": ["JavaScript"], "preferred_skills": []})
 
-    result = skill_gap_service.compute(resume, jd, _embedding_adapter)
+    result = skill_gap_service.compute(resume, jd, _embedding_adapter, _always_no_llm)
 
     assert result["matched_skills"] == ["JavaScript"]
     assert result["missing_required_skills"] == []
@@ -57,7 +76,7 @@ def test_compute_matches_postgres_postgresql():
     resume = Resume(structured_data={"skills": ["Postgres"]})
     jd = JobDescription(structured_data={"required_skills": ["PostgreSQL"], "preferred_skills": []})
 
-    result = skill_gap_service.compute(resume, jd, _embedding_adapter)
+    result = skill_gap_service.compute(resume, jd, _embedding_adapter, _always_no_llm)
 
     assert result["matched_skills"] == ["PostgreSQL"]
     assert result["missing_required_skills"] == []
@@ -71,7 +90,7 @@ def test_compute_matches_via_alias_table_not_just_embeddings():
     resume = Resume(structured_data={"skills": ["K8s"]})
     jd = JobDescription(structured_data={"required_skills": ["Kubernetes"], "preferred_skills": []})
 
-    result = skill_gap_service.compute(resume, jd, _embedding_adapter)
+    result = skill_gap_service.compute(resume, jd, _embedding_adapter, _always_no_llm)
 
     assert result["matched_skills"] == ["Kubernetes"]
     assert result["missing_required_skills"] == []
@@ -79,11 +98,15 @@ def test_compute_matches_via_alias_table_not_just_embeddings():
 
 def test_compute_rejects_unrelated_skills():
     # Negative control: proves the similarity threshold doesn't just match
-    # everything - an objective guard against a too-loose upgrade.
+    # everything - an objective guard against a too-loose upgrade. Also now
+    # exercises the layer-4 LLM fallback path for real: 0.578 cosine falls
+    # inside the ambiguous band (0.35-0.85), so this pair reaches
+    # _always_no_llm rather than being excluded outright - this test is
+    # what proves that path still lands on "not a match."
     resume = Resume(structured_data={"skills": ["Python"]})
     jd = JobDescription(structured_data={"required_skills": ["Kubernetes"], "preferred_skills": []})
 
-    result = skill_gap_service.compute(resume, jd, _embedding_adapter)
+    result = skill_gap_service.compute(resume, jd, _embedding_adapter, _always_no_llm)
 
     assert result["matched_skills"] == []
     assert result["missing_required_skills"] == ["Kubernetes"]
@@ -93,11 +116,16 @@ def test_compute_rejects_unrelated_skills():
 def test_compute_rejects_false_friend_java_javascript():
     # The concrete false-positive risk that ruled out a pure-embedding
     # design: "Java" vs "JavaScript" scores ~0.83 cosine similarity, which
-    # would clear a looser threshold despite not being the same skill.
+    # would clear a looser threshold despite not being the same skill. This
+    # score also falls inside the layer-4 ambiguous band, so this pair now
+    # genuinely reaches the LLM fallback (via _always_no_llm here) rather
+    # than being excluded by the embedding threshold alone - see
+    # test_skill_gap_cross_domain.py for the equivalent check against a
+    # verdict confirmed from the real model, not a scripted stand-in.
     resume = Resume(structured_data={"skills": ["Java"]})
     jd = JobDescription(structured_data={"required_skills": ["JavaScript"], "preferred_skills": []})
 
-    result = skill_gap_service.compute(resume, jd, _embedding_adapter)
+    result = skill_gap_service.compute(resume, jd, _embedding_adapter, _always_no_llm)
 
     assert result["matched_skills"] == []
     assert result["missing_required_skills"] == ["JavaScript"]
