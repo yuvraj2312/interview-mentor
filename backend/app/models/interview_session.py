@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +20,11 @@ class InterviewSession(Base):
     interview_plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("interview_plans.id"), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(20), default="in_progress")
     current_turn_index: Mapped[int] = mapped_column(Integer, default=0)
+    # CE-c: 1-based ordinal of the current main-topic slot - distinct from
+    # current_turn_index (total exchanges, which can now exceed
+    # total_questions once follow-ups exist). Old rows default to 0; only
+    # meaningful while a session is actively in progress.
+    topic_number: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     total_questions: Mapped[int] = mapped_column(Integer)
     current_difficulty: Mapped[int] = mapped_column(Integer)
     topic_queue: Mapped[list] = mapped_column(JSONB)
@@ -50,6 +55,13 @@ class InterviewTurn(Base):
     communication_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # CE-c: persisted (unlike the live-only follow-up budget counter) because
+    # the finished-session transcript is built entirely from these rows and
+    # has no access to Redis's ephemeral live state. topic_number is
+    # nullable - old rows predate CE-c and have no accurate value to backfill.
+    is_followup: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    topic_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    followup_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     session: Mapped["InterviewSession"] = relationship(back_populates="turns")

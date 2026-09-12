@@ -14,6 +14,12 @@ class InterviewSessionQuestionOut(BaseModel):
     topic: str
     difficulty: int
     question_text: str
+    # CE-c: 1-based ordinal of the current main-topic slot (distinct from
+    # turn_index, which counts total exchanges including follow-ups).
+    topic_number: int = 1
+    is_followup: bool = False
+    # 1-based "this is follow-up #N for this topic"; None when not a follow-up.
+    followup_number: int | None = None
 
 
 class StartInterviewSessionResponse(BaseModel):
@@ -47,6 +53,7 @@ class SubmitInterviewAnswerResponse(BaseModel):
     summary: InterviewSessionSummaryOut | None = None
     total_cost_usd: float
     cost_cap_usd: float
+    topic_number: int = 1
     stop_reason: Literal["completed", "cost_cap_exceeded"] | None = None
 
 
@@ -57,6 +64,9 @@ class InterviewTurnOut(BaseModel):
     question_text: str
     answer_text: str | None = None
     evaluation: InterviewTurnEvaluationOut | None = None
+    topic_number: int | None = None
+    is_followup: bool = False
+    followup_reason: str | None = None
 
 
 class InterviewSessionTranscript(BaseModel):
@@ -85,6 +95,7 @@ class InterviewSessionStateOut(BaseModel):
     status: Literal["planned", "in_progress", "evaluating", "advancing", "complete", "abandoned"]
     turn_index: int
     total_questions: int
+    topic_number: int = 1
     current_difficulty: int
     current_question: InterviewSessionQuestionOut | None = None
     last_activity_at: datetime

@@ -64,12 +64,14 @@ def advance(
     topic_queue: list,
     asked_questions: list,
     total_cost_usd: float,
+    topic_number: int,
 ) -> InterviewSession:
     session.current_turn_index += 1
     session.current_difficulty = current_difficulty
     session.topic_queue = topic_queue
     session.asked_questions = asked_questions
     session.total_cost_usd = total_cost_usd
+    session.topic_number = topic_number
     session.last_activity_at = datetime.now(timezone.utc)
     db.add(session)
     db.flush()
@@ -88,7 +90,12 @@ def bump_cost(db: DBSession, session: InterviewSession, *, total_cost_usd: float
 
 
 def complete(
-    db: DBSession, session: InterviewSession, *, total_cost_usd: float, stop_reason: str
+    db: DBSession,
+    session: InterviewSession,
+    *,
+    total_cost_usd: float,
+    stop_reason: str,
+    topic_number: int | None = None,
 ) -> InterviewSession:
     now = datetime.now(timezone.utc)
     session.status = "complete"
@@ -96,6 +103,8 @@ def complete(
     session.last_activity_at = now
     session.total_cost_usd = total_cost_usd
     session.stop_reason = stop_reason
+    if topic_number is not None:
+        session.topic_number = topic_number
     db.add(session)
     db.flush()
     return session

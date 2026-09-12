@@ -57,8 +57,11 @@ def _ready_plan(client, access_token):
     return response.json()
 
 
-def _fake_generate_question(llm, *, topic, difficulty, candidate_level, asked_questions, project=None):
-    return {"question_text": f"Question #{len(asked_questions)} on {topic} (d{difficulty})"}
+def _fake_generate_question(
+    llm, *, topic, difficulty, candidate_level, asked_questions, project=None, followup_context=None
+):
+    prefix = "Followup" if followup_context else "Question"
+    return {"question_text": f"{prefix} #{len(asked_questions)} on {topic} (d{difficulty})"}
 
 
 def _score(value: float) -> dict:
@@ -333,3 +336,147 @@ def test_user_cannot_access_another_users_session(client):
         f"/interview-sessions/{start['session_id']}", headers={"Authorization": f"Bearer {tokens_b['access_token']}"}
     )
     assert response.status_code == 404
+
+
+# ---- CE-c: interviewer-initiated follow-up questions ----
+
+
+def test_needs_followup_false_does_not_trigger_a_followup(client):
+    """Negative control, wiring level: a canned evaluation with no
+    needs_followup key (defaults False via adjust_difficulty_node's .get())
+    must advance to the next main topic exactly like pre-CE-c behavior. The
+    real-LLM equivalent (a genuinely strong answer -> needs_followup: false
+    from the actual Evaluator) is a manual smoke-test step, not this test -
+    LLM judgment isn't something a deterministic unit test should assert on.
+    """
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)
+
+    spy = MagicMock(side_effect=_fake_generate_question)
+    with patch("app.workflows.interview_graph.generate_question", spy):
+        start = client.post(
+            "/interview-sessions",
+            json={"interview_plan_id": plan["id"]},
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).json()
+    session_id = start["session_id"]
+    assert start["question"]["topic_number"] == 1
+    assert start["question"]["is_followup"] is False
+
+    with patch("app.workflows.interview_graph.generate_question", spy), patch(
+        "app.workflows.interview_graph.evaluate_answer", return_value=_score(9.0)
+    ):
+        response = client.post(
+            f"/interview-sessions/{session_id}/answer",
+            json={"answer_text": "a complete, thorough answer"},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["next_question"]["is_followup"] is False
+    assert body["next_question"]["followup_number"] is None
+    assert body["topic_number"] == 2
+    assert all(call.kwargs.get("followup_context") is None for call in spy.call_args_list)
+
+
+def test_followup_budget_caps_at_two_per_topic_and_resets_on_topic_advance(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)  # WIDE_PLAN_FAKE_RESULT: Python fundamentals x3, System design x2
+
+    spy = MagicMock(side_effect=_fake_generate_question)
+    with patch("app.workflows.interview_graph.generate_question", spy):
+        start = client.post(
+            "/interview-sessions",
+            json={"interview_plan_id": plan["id"]},
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).json()
+    session_id = start["session_id"]
+
+    needy_score = {**_score(5.0), "needs_followup": True, "followup_reason": "Did not cover X."}
+
+    bodies = []
+    with patch("app.workflows.interview_graph.generate_question", spy), patch(
+        "app.workflows.interview_graph.evaluate_answer", side_effect=[needy_score, needy_score, needy_score]
+    ):
+        for _ in range(3):
+            response = client.post(
+                f"/interview-sessions/{session_id}/answer",
+                json={"answer_text": "a thin answer"},
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            assert response.status_code == 200, response.text
+            bodies.append(response.json())
+
+    # follow-up #1: same topic, budget now 1/2 used
+    assert bodies[0]["next_question"]["is_followup"] is True
+    assert bodies[0]["next_question"]["topic_number"] == 1
+    assert bodies[0]["next_question"]["followup_number"] == 1
+    assert bodies[0]["topic_number"] == 1
+
+    # follow-up #2: same topic, budget now exhausted (2/2)
+    assert bodies[1]["next_question"]["is_followup"] is True
+    assert bodies[1]["next_question"]["topic_number"] == 1
+    assert bodies[1]["next_question"]["followup_number"] == 2
+    assert bodies[1]["topic_number"] == 1
+
+    # 3rd needs_followup: true is ignored once the budget is exhausted -
+    # forced advance to the next main topic, budget resets structurally
+    assert bodies[2]["next_question"]["is_followup"] is False
+    assert bodies[2]["next_question"]["topic_number"] == 2
+    assert bodies[2]["topic_number"] == 2
+
+    # integration proof: both follow-up calls were grounded in the specific
+    # reason, not a generic prompt
+    followup_calls = [c for c in spy.call_args_list if c.kwargs.get("followup_context") is not None]
+    assert len(followup_calls) == 2
+    assert all(c.kwargs["followup_context"]["followup_reason"] == "Did not cover X." for c in followup_calls)
+    assert all(c.kwargs["followup_context"]["original_question"] for c in followup_calls)
+
+    # difficulty adjustment is untouched and independent: every one of the 3
+    # weak (score 5.0) answers still nudges difficulty down/holds exactly as
+    # compute_next_difficulty would for a non-followup weak answer - proven
+    # by test_difficulty_adjustment.py passing unmodified (see that file),
+    # not re-asserted here to avoid duplicating that coverage.
+
+
+def test_followup_grounds_in_the_original_question_and_answer(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)
+
+    spy = MagicMock(side_effect=_fake_generate_question)
+    with patch("app.workflows.interview_graph.generate_question", spy):
+        start = client.post(
+            "/interview-sessions",
+            json={"interview_plan_id": plan["id"]},
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).json()
+    session_id = start["session_id"]
+    original_question_text = start["question"]["question_text"]
+
+    needy_score = {
+        **_score(5.0),
+        "needs_followup": True,
+        "followup_reason": "Did not explain how concurrent writes are handled.",
+    }
+    with patch("app.workflows.interview_graph.generate_question", spy), patch(
+        "app.workflows.interview_graph.evaluate_answer", return_value=needy_score
+    ):
+        response = client.post(
+            f"/interview-sessions/{session_id}/answer",
+            json={"answer_text": "It uses a queue."},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    assert response.status_code == 200, response.text
+
+    followup_call = next(c for c in spy.call_args_list if c.kwargs.get("followup_context") is not None)
+    assert followup_call.kwargs["followup_context"] == {
+        "original_question": original_question_text,
+        "original_answer": "It uses a queue.",
+        "followup_reason": "Did not explain how concurrent writes are handled.",
+    }
+    # the follow-up stays on the SAME topic as the question it's following up on
+    assert followup_call.kwargs["topic"] == start["question"]["topic"]

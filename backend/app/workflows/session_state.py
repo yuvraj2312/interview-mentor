@@ -43,6 +43,14 @@ class LiveQuestion(TypedDict):
     # CE-b: resets to 0 every time _live_question() rebuilds this on a turn
     # advance, so the per-question clarification cap naturally resets too.
     clarification_count: int
+    # CE-c: whether THIS turn is itself a follow-up, and how many follow-ups
+    # have been used on the current topic so far (including this one, if
+    # is_followup). Unlike clarification_count this does NOT unconditionally
+    # reset on every turn - it must survive across follow-up turns on the
+    # same topic and only reset when a new topic starts, so each graph node
+    # that produces a turn sets it explicitly (see interview_graph.py).
+    is_followup: bool
+    followup_count: int
 
 
 class LiveSessionState(TypedDict):
@@ -50,6 +58,11 @@ class LiveSessionState(TypedDict):
     status: str
     turn_index: int
     total_questions: int
+    # CE-c: 1-based ordinal of the current main-topic slot, distinct from
+    # turn_index (total exchanges, which now can exceed total_questions once
+    # follow-ups exist). Incremented only when topic_queue advances to a
+    # genuinely new topic - never by a follow-up turn.
+    topic_number: int
     current_difficulty: int
     # CE-a: each entry is {"topic": str, "project": dict | None}.
     topic_queue: list[dict]

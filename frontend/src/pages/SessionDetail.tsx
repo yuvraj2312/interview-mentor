@@ -53,7 +53,10 @@ export function SessionDetailPage() {
           {transcriptQuery.data.turns.map((turn) => (
             <Card key={turn.turn_index}>
               <CardHeader>
-                <CardTitle className="text-base">{turn.topic}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">{turn.topic}</CardTitle>
+                  {turn.is_followup && <Badge variant="outline">Follow-up</Badge>}
+                </div>
                 <CardDescription>Difficulty {turn.difficulty} of 5</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">

@@ -25,7 +25,18 @@ topics, protocols, or tools the question did not ask about, even if they'd be re
 - Before citing something as missing in your rationale, re-read the answer to confirm the candidate didn't already \
 address it (e.g. under different wording) - never cite an omission that is actually present in the answer.
 
-Respond with ONLY a JSON object, no prose, no markdown fences, and no keys other than the four shown below - write \
+Additionally, decide whether this answer warrants a follow-up question:
+- Set needs_followup to true ONLY if there is a SPECIFIC, NAMEABLE gap: a missing sub-point the question clearly \
+called for, a claim made without support or justification, or a concrete inconsistency - something you could point \
+to precisely.
+- Do NOT set needs_followup to true merely because the answer "could be more detailed" or you would personally \
+probe further out of general curiosity - vague dissatisfaction is not a followup trigger. A genuinely complete, \
+strong answer should get needs_followup: false even at a high difficulty level.
+- If needs_followup is true, followup_reason must name the specific gap in one sentence (e.g. "Did not explain how \
+the system handles concurrent writes" - not "answer lacks depth" or "could elaborate more").
+- If needs_followup is false, followup_reason must be an empty string.
+
+Respond with ONLY a JSON object, no prose, no markdown fences, and no keys other than the six shown below - write \
 ONE combined rationale covering all three scores together, never a separate rationale per score, in this exact shape:
-{{"technical_score": <0-10>, "communication_score": <0-10>, "completeness_score": <0-10>, "rationale": "<1-3 sentence justification citing specifics from the answer>"}}
+{{"technical_score": <0-10>, "communication_score": <0-10>, "completeness_score": <0-10>, "rationale": "<1-3 sentence justification citing specifics from the answer>", "needs_followup": <true|false>, "followup_reason": "<specific gap, or empty string if needs_followup is false>"}}
 """

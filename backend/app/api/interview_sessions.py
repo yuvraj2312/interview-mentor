@@ -44,9 +44,28 @@ def _get_plan_or_404(db: DBSession, plan_id: uuid.UUID, user_id: uuid.UUID) -> I
     return plan
 
 
+def _followup_number(turn: InterviewTurn) -> int | None:
+    # CE-c: 1-based "this is follow-up #N for this topic," derived from the
+    # persisted is_followup/topic_number columns rather than the ephemeral
+    # Redis followup_count, so this is correct for historical/REST reads too
+    # (the live WS path uses the cheaper Redis counter directly - see
+    # interview_session_ws.py::_state_envelope).
+    if not turn.is_followup:
+        return None
+    return sum(
+        1 for t in turn.session.turns if t.topic_number == turn.topic_number and t.is_followup and t.idx <= turn.idx
+    )
+
+
 def _question_out(turn: InterviewTurn) -> InterviewSessionQuestionOut:
     return InterviewSessionQuestionOut(
-        turn_index=turn.idx, topic=turn.topic, difficulty=turn.difficulty, question_text=turn.question_text
+        turn_index=turn.idx,
+        topic=turn.topic,
+        difficulty=turn.difficulty,
+        question_text=turn.question_text,
+        topic_number=turn.topic_number or 1,
+        is_followup=turn.is_followup,
+        followup_number=_followup_number(turn),
     )
 
 
@@ -153,6 +172,7 @@ async def submit_interview_answer(
             summary=_build_summary(session),
             total_cost_usd=session.total_cost_usd,
             cost_cap_usd=session.cost_cap_usd,
+            topic_number=session.topic_number,
             stop_reason=session.stop_reason,
         )
 
@@ -162,6 +182,7 @@ async def submit_interview_answer(
         next_question=_question_out(next_turn),
         total_cost_usd=session.total_cost_usd,
         cost_cap_usd=session.cost_cap_usd,
+        topic_number=session.topic_number,
         stop_reason=session.stop_reason,
     )
 
@@ -191,6 +212,9 @@ def get_interview_session(
                 if t.answer_text is not None
                 else None
             ),
+            topic_number=t.topic_number,
+            is_followup=t.is_followup,
+            followup_reason=t.followup_reason,
         )
         for t in session.turns
     ]
@@ -209,16 +233,28 @@ def get_interview_session_state(
     session = _get_session_or_404(db, session_id, current_user.id)
     live_state = interview_session_service.get_live_state(db, session)
 
+    current_question = live_state["current_question"]
     return InterviewSessionStateOut(
         session_id=session.id,
         interview_plan_id=session.interview_plan_id,
         status=live_state["status"],
         turn_index=live_state["turn_index"],
         total_questions=live_state["total_questions"],
+        topic_number=live_state["topic_number"],
         current_difficulty=live_state["current_difficulty"],
         current_question=(
-            InterviewSessionQuestionOut(**live_state["current_question"])
-            if live_state["current_question"] is not None
+            InterviewSessionQuestionOut(
+                turn_index=current_question["turn_index"],
+                topic=current_question["topic"],
+                difficulty=current_question["difficulty"],
+                question_text=current_question["question_text"],
+                topic_number=live_state["topic_number"],
+                is_followup=current_question["is_followup"],
+                followup_number=(
+                    current_question["followup_count"] if current_question["is_followup"] else None
+                ),
+            )
+            if current_question is not None
             else None
         ),
         last_activity_at=live_state["last_activity_at"],

@@ -14,12 +14,10 @@ Once `backend/` exists: infra (`postgres`, `redis`, `minio`, `qdrant`) runs in D
 
 Standard local dev loop, from `backend/`:
 - `docker compose up -d` — starts only postgres (`localhost:5433`), redis (`localhost:6380`), minio (`localhost:9000`), qdrant (`localhost:6333`) — matches `backend/.env`. This is the command to reach for by default.
-- `powershell -File scripts\run-api.ps1` — run the API on the host. Prefer this over typing `uvicorn app.main:app --reload` / `python -m uvicorn ...` by hand: those rely on ambient PATH resolution for `python`/`uvicorn`, and if the venv isn't activated in the current shell, PATH can silently resolve to a different Python install instead of `backend/.venv` — the process still binds the port and looks fine, but may be missing project dependencies or, if it's an old process from an earlier terminal that was never restarted, keep serving stale code with no visible sign anything is wrong. The script sidesteps this by always invoking `.venv\Scripts\python.exe` explicitly.
-- `powershell -File scripts\run-worker.ps1` — run the background worker on the host, same explicit-interpreter reasoning as above.
+- `uvicorn app.main:app --reload` — run the API on the host.
+- `arq app.background.worker.WorkerSettings` — run the background worker on the host.
 
 `docker compose --profile full-stack up -d` also starts `backend`/`worker` as containers — only use this for a deliberate fully-containerized run (e.g. a from-scratch smoke test), and don't run it alongside the host `uvicorn`/`arq` commands above, since both would bind the same ports/queue.
-
-**Confirming what a running dev server is actually serving.** On this project's dev machine, Windows process-inspection tools (`Get-Process`, `Get-CimInstance Win32_Process`, netstat's PID column) have been observed to report a Python process's executable/command line inconsistently with what the process itself reports via its own `sys.executable` — and a just-killed process's port can keep showing as `LISTENING` in `netstat` for a while after the process is gone. Don't trust process/port listings alone to conclude a server is stale or to confirm you killed the right thing. The reliable check is behavioral: hit the running server (a REST call, a WS message) and look for something — an error string, a response field — that only the current code would produce, then compare against what's actually on disk.
 
 ## Project
 
@@ -90,7 +88,7 @@ interview-mentor/
 - **All LLM/agent calls must be traced** (prompt, response, latency, token cost) from Phase 4 onward — required for both cost control and quality auditing, not optional instrumentation.
 - **Resume files never go in PostgreSQL** — original files go to object storage; only extracted text/metadata is relational. This was an explicit fix from v1.
 - **Hallucination scoring and hiring-probability scoring are deferred (Could-have)** — they require labeled/calibration data that won't exist at launch. Don't build these speculatively.
-- Voice mode, whiteboard/system-design canvas mode, multi-language support, and enterprise/B2B features are explicitly **out of scope** until Phase 9+.
+- Voice mode, whiteboard/system-design canvas mode, multi-language support, and enterprise/B2B features are explicitly **out of scope** until Phase 8+.
 
 ## Delivery sequencing
 

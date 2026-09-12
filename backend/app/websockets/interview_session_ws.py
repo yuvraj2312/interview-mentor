@@ -75,16 +75,28 @@ def _resolve_user(token: str, session_id: uuid.UUID) -> User:
 
 
 def _state_envelope(session, live_state: dict) -> dict:
+    current_question = live_state["current_question"]
     payload = InterviewSessionStateOut(
         session_id=session.id,
         interview_plan_id=session.interview_plan_id,
         status=live_state["status"],
         turn_index=live_state["turn_index"],
         total_questions=live_state["total_questions"],
+        topic_number=live_state["topic_number"],
         current_difficulty=live_state["current_difficulty"],
         current_question=(
-            InterviewSessionQuestionOut(**live_state["current_question"])
-            if live_state["current_question"] is not None
+            InterviewSessionQuestionOut(
+                turn_index=current_question["turn_index"],
+                topic=current_question["topic"],
+                difficulty=current_question["difficulty"],
+                question_text=current_question["question_text"],
+                topic_number=live_state["topic_number"],
+                is_followup=current_question["is_followup"],
+                followup_number=(
+                    current_question["followup_count"] if current_question["is_followup"] else None
+                ),
+            )
+            if current_question is not None
             else None
         ),
         last_activity_at=live_state["last_activity_at"],
@@ -137,6 +149,7 @@ def _handle_answer(session_id: uuid.UUID, user_id: uuid.UUID, answer_text: str) 
                 "summary": _build_summary(session).model_dump(mode="json"),
                 "total_cost_usd": session.total_cost_usd,
                 "cost_cap_usd": session.cost_cap_usd,
+                "topic_number": session.topic_number,
                 "stop_reason": session.stop_reason,
             }
             return message, True
@@ -149,6 +162,7 @@ def _handle_answer(session_id: uuid.UUID, user_id: uuid.UUID, answer_text: str) 
             "summary": None,
             "total_cost_usd": session.total_cost_usd,
             "cost_cap_usd": session.cost_cap_usd,
+            "topic_number": session.topic_number,
             "stop_reason": session.stop_reason,
         }
         return message, False

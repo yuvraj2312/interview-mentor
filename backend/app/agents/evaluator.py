@@ -9,7 +9,14 @@ from app.llm_adapter import LLMAdapter
 from app.prompts import ADAPTIVE_EVALUATION_PROMPT
 from app.utils.json_parsing import parse_llm_json
 
-REQUIRED_KEYS = ("technical_score", "communication_score", "completeness_score", "rationale")
+REQUIRED_KEYS = (
+    "technical_score",
+    "communication_score",
+    "completeness_score",
+    "rationale",
+    "needs_followup",
+    "followup_reason",
+)
 
 
 def evaluate_answer(llm: LLMAdapter, *, question_text: str, answer_text: str, difficulty: int) -> dict:

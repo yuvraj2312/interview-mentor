@@ -8,6 +8,7 @@ TOPIC: {topic}
 DIFFICULTY: {difficulty} (on a 1-5 scale, where 1 is entry-level/basic and 5 is expert-level/advanced)
 CANDIDATE LEVEL: {candidate_level}
 {project_context}
+{followup_context}
 Do not repeat or closely paraphrase any of these questions already asked in this session:
 {asked_questions}
 
@@ -26,4 +27,17 @@ about the topic in isolation.
 PROJECT NAME: {name}
 PROJECT DESCRIPTION: {description}
 TECHNOLOGIES USED: {technologies}
+"""
+
+# CE-c: interpolated into {followup_context} above only when generating a
+# same-topic follow-up; left as "" otherwise so a non-follow-up prompt is
+# byte-identical to the pre-CE-c prompt.
+FOLLOWUP_INSTRUCTION = """
+This is a FOLLOW-UP question, not a fresh question - the candidate already attempted the question below, and \
+their answer left a specific, nameable gap. Ask a targeted follow-up that concretely addresses that gap - do not \
+ask a generic "can you elaborate" question, and do not simply repeat the original question.
+
+ORIGINAL QUESTION: {original_question}
+CANDIDATE'S ANSWER: {original_answer}
+SPECIFIC GAP TO PROBE: {followup_reason}
 """

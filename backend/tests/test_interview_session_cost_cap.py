@@ -33,13 +33,15 @@ def _clarification_response(text: str) -> str:
     return json.dumps({"clarification_text": text})
 
 
-def _evaluation_response(score: float = 6.0) -> str:
+def _evaluation_response(score: float = 6.0, *, needs_followup: bool = False, followup_reason: str = "") -> str:
     return json.dumps(
         {
             "technical_score": score,
             "communication_score": score,
             "completeness_score": score,
             "rationale": "canned",
+            "needs_followup": needs_followup,
+            "followup_reason": followup_reason,
         }
     )
 
@@ -232,3 +234,44 @@ def test_ws_clarify_bumps_cost_and_declines_once_cap_reached(client, monkeypatch
     body = response.json()
     assert body["status"] == "complete"
     assert body["stop_reason"] == "cost_cap_exceeded"
+
+
+def test_followup_heavy_session_still_respects_cost_cap(client, monkeypatch):
+    # CE-c: will_follow_up is gated on `not cost_cap_exceeded` in
+    # adjust_difficulty_node, checked BEFORE the follow-up branch is taken -
+    # so a session that just crossed the cap must complete with
+    # stop_reason=cost_cap_exceeded even when the evaluator's own response
+    # says needs_followup: true. Proven concretely here: only Q0 and one
+    # evaluation response are ever queued, so if the code incorrectly took
+    # the follow-up branch and tried to generate a follow-up question, the
+    # FakeLLMAdapter would raise IndexError popping from an empty list
+    # rather than silently succeeding.
+    monkeypatch.setattr(settings, "interview_session_max_cost_usd", 3.0)
+
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)
+
+    responses = [_question_response("Q0")]
+    factory = fake_llm_factory(responses, cost_per_call=2.0)
+
+    start = _start_with_fake_llm(client, access_token, plan["id"], factory)
+    session_id = start["session_id"]
+
+    # evaluate_answer ($2) pushes accumulated cost from $2 -> $4, over the $3
+    # cap - even though this evaluation flags needs_followup: true, the cap
+    # must win: no follow-up question should ever be requested.
+    responses.append(_evaluation_response(needs_followup=True, followup_reason="Did not cover X."))
+    with patch("app.services.interview_session_service.get_llm_adapter", side_effect=factory):
+        response = client.post(
+            f"/interview-sessions/{session_id}/answer",
+            json={"answer_text": "a thin answer"},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["status"] == "complete"
+    assert body["stop_reason"] == "cost_cap_exceeded"
+    assert body["total_cost_usd"] == 4.0
+    assert responses == []  # no follow-up (or next-question) call was made after the cap tripped

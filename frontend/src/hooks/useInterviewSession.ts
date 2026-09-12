@@ -130,6 +130,9 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
             question_text: pending.question.question_text,
             answer_text: pending.answerText,
             evaluation: message.evaluation,
+            topic_number: pending.question.topic_number,
+            is_followup: pending.question.is_followup,
+            followup_reason: null,
           }
           setHistory((prev) => [...prev.filter((t) => t.turn_index !== entry.turn_index), entry])
         }
@@ -144,6 +147,7 @@ export function useInterviewSessionSocket(sessionId: string | undefined) {
                 status: message.status,
                 current_question: message.next_question,
                 turn_index: message.next_question ? message.next_question.turn_index : prev.turn_index + 1,
+                topic_number: message.topic_number,
                 summary: message.summary,
                 total_cost_usd: message.total_cost_usd,
                 cost_cap_usd: message.cost_cap_usd,

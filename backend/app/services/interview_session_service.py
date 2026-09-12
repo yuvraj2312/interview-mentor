@@ -79,13 +79,19 @@ def _topic_queue_from_mix(topic_mix: list) -> list[dict]:
     ]
 
 
-def _live_question(turn: InterviewTurn) -> LiveQuestion:
+def _live_question(turn: InterviewTurn, *, followup_count: int) -> LiveQuestion:
     return {
         "turn_index": turn.idx,
         "topic": turn.topic,
         "difficulty": turn.difficulty,
         "question_text": turn.question_text,
         "clarification_count": 0,
+        # is_followup is read from the persisted column (accurate even after
+        # a Postgres rehydration); followup_count is the live budget counter
+        # and is NOT persisted, so callers must supply it explicitly - see
+        # CE-c's durability split in the module-level notes above.
+        "is_followup": turn.is_followup,
+        "followup_count": followup_count,
     }
 
 
@@ -95,6 +101,7 @@ def _state_blob(
     status: str,
     turn_index: int,
     total_questions: int,
+    topic_number: int,
     current_difficulty: int,
     topic_queue: list[dict],
     asked_questions: list[str],
@@ -109,6 +116,7 @@ def _state_blob(
         "status": status,
         "turn_index": turn_index,
         "total_questions": total_questions,
+        "topic_number": topic_number,
         "current_difficulty": current_difficulty,
         "topic_queue": topic_queue,
         "asked_questions": asked_questions,
@@ -126,6 +134,7 @@ def _terminal_blob(session: InterviewSession) -> LiveSessionState:
         status=session.status,
         turn_index=session.current_turn_index,
         total_questions=session.total_questions,
+        topic_number=session.topic_number,
         current_difficulty=session.current_difficulty,
         topic_queue=session.topic_queue,
         asked_questions=session.asked_questions,
@@ -144,10 +153,14 @@ def _rehydrate_in_progress(session: InterviewSession) -> LiveSessionState:
         status=SessionStatus.IN_PROGRESS.value,
         turn_index=session.current_turn_index,
         total_questions=session.total_questions,
+        topic_number=session.topic_number,
         current_difficulty=session.current_difficulty,
         topic_queue=session.topic_queue,
         asked_questions=session.asked_questions,
-        current_question=_live_question(current_turn),
+        # A Redis loss mid-followup-sequence resets the visible/enforced
+        # follow-up budget to 0 for the current topic, same accepted
+        # tradeoff CE-b made for clarification_count - see module docstring.
+        current_question=_live_question(current_turn, followup_count=0),
         last_activity_at=session.last_activity_at,
         total_cost_usd=session.total_cost_usd,
         cost_cap_usd=session.cost_cap_usd,
@@ -336,12 +349,17 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
             "total_questions": plan.question_count,
             "question_text": None,
             "answer_text": None,
+            "current_topic": None,
+            "topic_number": 0,
+            "followup_count": 0,
             "accumulated_cost_usd": 0.0,
             "cost_cap_usd": cost_cap_usd,
             "next_topic": None,
             "next_question_text": None,
             "evaluation": None,
+            "is_followup": False,
             "done": False,
+            "will_follow_up": False,
             "stop_reason": None,
         }
     )
@@ -349,6 +367,7 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
     session.topic_queue = result["topic_queue"]
     session.asked_questions = [result["next_question_text"]]
     session.total_cost_usd = result["accumulated_cost_usd"]
+    session.topic_number = result["topic_number"]
     db.add(session)
 
     turn = InterviewTurn(
@@ -357,6 +376,8 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
         topic=result["next_topic"],
         difficulty=starting_difficulty,
         question_text=result["next_question_text"],
+        is_followup=False,
+        topic_number=result["topic_number"],
     )
     db.add(turn)
     db.commit()
@@ -369,10 +390,11 @@ def start_session(db: DBSession, *, user_id: uuid.UUID, plan: InterviewPlan) -> 
             status=SessionStatus.IN_PROGRESS.value,
             turn_index=0,
             total_questions=session.total_questions,
+            topic_number=session.topic_number,
             current_difficulty=starting_difficulty,
             topic_queue=result["topic_queue"],
             asked_questions=session.asked_questions,
-            current_question=_live_question(turn),
+            current_question=_live_question(turn, followup_count=0),
             last_activity_at=session.last_activity_at,
             total_cost_usd=session.total_cost_usd,
             cost_cap_usd=session.cost_cap_usd,
@@ -407,6 +429,7 @@ def submit_answer(
 
     llm = get_llm_adapter(db, session_id=session.id)
     graph = build_interview_graph(llm)
+    current_question = live_state["current_question"]
     result = graph.invoke(
         {
             "action": "answer",
@@ -416,14 +439,19 @@ def submit_answer(
             "current_difficulty": live_state["current_difficulty"],
             "turn_index": live_state["turn_index"],
             "total_questions": live_state["total_questions"],
-            "question_text": live_state["current_question"]["question_text"],
+            "question_text": current_question["question_text"],
             "answer_text": answer_text,
+            "current_topic": current_question["topic"],
+            "topic_number": live_state["topic_number"],
+            "followup_count": current_question.get("followup_count", 0),
             "accumulated_cost_usd": live_state["total_cost_usd"],
             "cost_cap_usd": live_state["cost_cap_usd"],
             "next_topic": None,
             "next_question_text": None,
             "evaluation": None,
+            "is_followup": False,
             "done": False,
+            "will_follow_up": False,
             "stop_reason": None,
         }
     )
@@ -438,7 +466,11 @@ def submit_answer(
 
     if result["done"]:
         interview_session_repository.complete(
-            db, session, total_cost_usd=result["accumulated_cost_usd"], stop_reason=result["stop_reason"]
+            db,
+            session,
+            total_cost_usd=result["accumulated_cost_usd"],
+            stop_reason=result["stop_reason"],
+            topic_number=result["topic_number"],
         )
         # current_turn's evaluation scores above are only db.add()-ed, not
         # flushed - SessionLocal runs autoflush=False (app/db.py), so an
@@ -460,6 +492,7 @@ def submit_answer(
         topic_queue=result["topic_queue"],
         asked_questions=asked_questions,
         total_cost_usd=result["accumulated_cost_usd"],
+        topic_number=result["topic_number"],
     )
     next_turn = InterviewTurn(
         session_id=session.id,
@@ -467,6 +500,9 @@ def submit_answer(
         topic=result["next_topic"],
         difficulty=result["current_difficulty"],
         question_text=result["next_question_text"],
+        is_followup=result["is_followup"],
+        topic_number=result["topic_number"],
+        followup_reason=(evaluation["followup_reason"] if result["is_followup"] else None),
     )
     db.add(next_turn)
     db.commit()
@@ -480,10 +516,11 @@ def submit_answer(
             status=SessionStatus.IN_PROGRESS.value,
             turn_index=session.current_turn_index,
             total_questions=session.total_questions,
+            topic_number=session.topic_number,
             current_difficulty=session.current_difficulty,
             topic_queue=session.topic_queue,
             asked_questions=session.asked_questions,
-            current_question=_live_question(next_turn),
+            current_question=_live_question(next_turn, followup_count=result["followup_count"]),
             last_activity_at=session.last_activity_at,
             total_cost_usd=session.total_cost_usd,
             cost_cap_usd=session.cost_cap_usd,

@@ -258,6 +258,13 @@ export interface InterviewQuestion {
   topic: string
   difficulty: number
   question_text: string
+  // CE-c: 1-based ordinal of the current main-topic slot, distinct from
+  // turn_index (total exchanges, which can exceed total_questions once
+  // follow-ups exist).
+  topic_number: number
+  is_followup: boolean
+  // 1-based "this is follow-up #N for this topic"; null when not a follow-up.
+  followup_number: number | null
 }
 
 export interface InterviewEvaluation {
@@ -281,6 +288,9 @@ export interface InterviewTurnOut {
   question_text: string
   answer_text: string | null
   evaluation: InterviewEvaluation | null
+  topic_number: number | null
+  is_followup: boolean
+  followup_reason: string | null
 }
 
 export interface InterviewSessionTranscript {
@@ -307,6 +317,7 @@ export interface InterviewStateMessage {
   status: InterviewSessionStatus
   turn_index: number
   total_questions: number
+  topic_number: number
   current_difficulty: number
   current_question: InterviewQuestion | null
   last_activity_at: string
@@ -324,6 +335,7 @@ export interface InterviewAnswerResultMessage {
   summary: InterviewSummary | null
   total_cost_usd: number
   cost_cap_usd: number
+  topic_number: number
   stop_reason: InterviewStopReason
 }
 

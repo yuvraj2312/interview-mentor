@@ -8,7 +8,7 @@ adaptive engine output").
 """
 
 from app.llm_adapter import LLMAdapter
-from app.prompts import PROJECT_GROUNDING_INSTRUCTION, QUESTION_GENERATOR_PROMPT
+from app.prompts import FOLLOWUP_INSTRUCTION, PROJECT_GROUNDING_INSTRUCTION, QUESTION_GENERATOR_PROMPT
 from app.utils.json_parsing import parse_llm_json
 
 REQUIRED_KEYS = ("question_text",)
@@ -22,6 +22,7 @@ def generate_question(
     candidate_level: str,
     asked_questions: list[str],
     project: dict | None = None,
+    followup_context: dict | None = None,
 ) -> dict:
     project_context = (
         PROJECT_GROUNDING_INSTRUCTION.format(
@@ -32,11 +33,21 @@ def generate_question(
         if project
         else ""
     )
+    followup_prompt_context = (
+        FOLLOWUP_INSTRUCTION.format(
+            original_question=followup_context["original_question"],
+            original_answer=followup_context["original_answer"],
+            followup_reason=followup_context["followup_reason"],
+        )
+        if followup_context
+        else ""
+    )
     prompt = QUESTION_GENERATOR_PROMPT.format(
         topic=topic,
         difficulty=difficulty,
         candidate_level=candidate_level,
         project_context=project_context,
+        followup_context=followup_prompt_context,
         asked_questions="\n".join(f"- {q}" for q in asked_questions) or "(none yet)",
     )
     raw = llm.generate(prompt, agent_name="question_generator", temperature=0.7, max_tokens=512)

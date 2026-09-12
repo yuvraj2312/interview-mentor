@@ -146,9 +146,14 @@ export function LiveInterviewPage() {
       )}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-ink-600">
-            Question {Math.min(state.turn_index + 1, state.total_questions)} of {state.total_questions}
-          </p>
+          <div className="flex flex-col gap-0.5">
+            <p className="text-sm text-ink-600">
+              Topic {Math.min(state.topic_number, state.total_questions)} of {state.total_questions}
+            </p>
+            {state.current_question?.is_followup && (
+              <p className="text-xs text-ink-400">Follow-up {state.current_question.followup_number} of 2</p>
+            )}
+          </div>
           <ConnectionIndicator status={connectionStatus} />
         </div>
         <Progress value={history.length} max={state.total_questions} />
@@ -163,7 +168,10 @@ export function LiveInterviewPage() {
           {history.map((turn) => (
             <Card key={turn.turn_index}>
               <CardContent className="flex flex-col gap-2 pt-6">
-                <p className="text-sm font-medium text-ink-900">{turn.question_text}</p>
+                <div className="flex items-center gap-2">
+                  {turn.is_followup && <Badge variant="outline">Follow-up</Badge>}
+                  <p className="text-sm font-medium text-ink-900">{turn.question_text}</p>
+                </div>
                 <p className="text-sm text-ink-600">{turn.answer_text}</p>
                 {turn.evaluation && (
                   <>
