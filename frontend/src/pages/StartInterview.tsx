@@ -60,7 +60,7 @@ export function StartInterviewPage() {
   async function handleStart() {
     if (!plan) return
     const result = await startSession.mutateAsync(plan.id)
-    navigate(`/interview-sessions/${result.session_id}/live`)
+    navigate(`/interview-sessions/${result.session_id}/check`)
   }
 
   return (
