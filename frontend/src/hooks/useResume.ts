@@ -5,8 +5,12 @@ import { deleteResume, getResume, updateResume, uploadResume } from '@/lib/api'
 const PROCESSING_STATUSES = new Set(['uploaded', 'parsing', 'analyzing'])
 
 export function useUploadResume() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (file: File) => uploadResume(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resumes'] })
+    },
   })
 }
 

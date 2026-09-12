@@ -2,7 +2,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 from app.core.security import decode_access_token
-from app.repositories import interview_plan_repository
+from app.repositories import interview_plan_repository, interview_session_repository
 from tests.conftest import TestSessionLocal, signup_and_get_tokens
 from tests.test_interview_plans import _compute_skill_gap, _create_ready_jd, _upload_and_ready_resume
 
@@ -205,6 +205,9 @@ def test_session_completes_after_question_count_turns_with_summary(client):
     assert transcript["status"] == "complete"
     assert len(transcript["turns"]) == 5
     assert all(turn["evaluation"] is not None for turn in transcript["turns"])
+    # Baseline regression check: with zero follow-ups, total questions asked
+    # (excluding follow-ups) matches total_questions exactly.
+    assert all(not turn["is_followup"] for turn in transcript["turns"])
 
 
 def test_generate_question_receives_growing_asked_questions_list_and_no_duplicates(client):
@@ -480,3 +483,130 @@ def test_followup_grounds_in_the_original_question_and_answer(client):
     }
     # the follow-up stays on the SAME topic as the question it's following up on
     assert followup_call.kwargs["topic"] == start["question"]["topic"]
+
+
+def test_session_with_max_followups_on_first_topic_still_completes_all_five_main_topics(client):
+    """Regression test: turn_index (every turn, including follow-ups) must
+    never be compared against total_questions (main-topic slot count only) -
+    see adjust_difficulty_node. Topic 1 uses its full follow-up budget (2),
+    then 4 more main topics must still be asked before the session completes;
+    the pre-fix behavior instead completed after only 3 main-topic-equivalent
+    turns because turn_index hit total_questions (5) too early.
+    """
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)  # WIDE_PLAN_FAKE_RESULT: 5 main-topic slots, "quick" format
+
+    with patch("app.workflows.interview_graph.generate_question", side_effect=_fake_generate_question):
+        start = client.post(
+            "/interview-sessions",
+            json={"interview_plan_id": plan["id"]},
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).json()
+    session_id = start["session_id"]
+
+    needy_score = {**_score(5.0), "needs_followup": True, "followup_reason": "Did not cover X."}
+    plain_score = _score(8.0)  # no needs_followup key -> defaults False
+
+    # Turns 1-3: topic 1's main answer, then its 2 allowed follow-ups
+    # (budget exhausted after the 2nd). Turns 4-7: topics 2-5, plain.
+    scores = [needy_score, needy_score, needy_score, plain_score, plain_score, plain_score, plain_score]
+
+    bodies = []
+    with patch("app.workflows.interview_graph.generate_question", side_effect=_fake_generate_question), patch(
+        "app.workflows.interview_graph.evaluate_answer", side_effect=scores
+    ):
+        for _ in range(7):
+            response = client.post(
+                f"/interview-sessions/{session_id}/answer",
+                json={"answer_text": "an answer"},
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            assert response.status_code == 200, response.text
+            bodies.append(response.json())
+
+    # Turns 1-2: follow-ups #1 and #2, still topic 1
+    assert [b["next_question"]["is_followup"] for b in bodies[:2]] == [True, True]
+    assert [b["next_question"]["topic_number"] for b in bodies[:2]] == [1, 1]
+    # Turn 3: budget exhausted -> forced advance to topic 2, despite needs_followup still true
+    assert bodies[2]["next_question"]["is_followup"] is False
+    assert bodies[2]["next_question"]["topic_number"] == 2
+    # Turns 4-6: topics 3, 4, 5 in progress
+    assert [b["status"] for b in bodies[3:6]] == ["in_progress", "in_progress", "in_progress"]
+    assert [b["next_question"]["topic_number"] for b in bodies[3:6]] == [3, 4, 5]
+
+    # 7th (final) answer completes the session having asked all 5 main
+    # topics - not just 3, which is what the pre-fix bug would have produced.
+    assert bodies[-1]["status"] == "complete"
+    assert bodies[-1]["stop_reason"] == "completed"
+    # difficulty_path has one entry per turn (main + follow-up); the
+    # main-topic-count assertion is checked below via the transcript.
+    assert len(bodies[-1]["summary"]["difficulty_path"]) == 7
+
+    transcript = client.get(
+        f"/interview-sessions/{session_id}", headers={"Authorization": f"Bearer {access_token}"}
+    ).json()
+    assert transcript["status"] == "complete"
+    assert len(transcript["turns"]) == 7  # 5 main-topic turns + 2 follow-ups
+    main_topic_turns = [t for t in transcript["turns"] if not t["is_followup"]]
+    assert len(main_topic_turns) == 5
+    assert [t["topic_number"] for t in main_topic_turns] == [1, 2, 3, 4, 5]
+
+
+# ---- Soft-delete ----
+
+
+def test_delete_interview_session_requires_auth(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)
+    start = _start_session(client, access_token, plan["id"])
+
+    response = client.delete(f"/interview-sessions/{start['session_id']}")
+    assert response.status_code == 401
+
+
+def test_delete_interview_session_hides_it_from_list_but_row_and_turns_remain_queryable(client):
+    tokens = signup_and_get_tokens(client)
+    access_token = tokens["access_token"]
+    plan = _ready_plan(client, access_token)
+    start = _start_session(client, access_token, plan["id"])
+    session_id = start["session_id"]
+
+    response = client.delete(
+        f"/interview-sessions/{session_id}", headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 204
+
+    list_response = client.get("/interview-sessions", headers={"Authorization": f"Bearer {access_token}"})
+    assert all(s["session_id"] != session_id for s in list_response.json())
+
+    get_response = client.get(
+        f"/interview-sessions/{session_id}", headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["session_id"] == session_id
+
+    # referential integrity: the row and its turns remain directly queryable,
+    # not cascade-wiped - matches the resume/JD soft-delete pattern.
+    db = TestSessionLocal()
+    try:
+        session = interview_session_repository.get_by_id(db, uuid.UUID(session_id))
+        assert session is not None
+        assert session.deleted_at is not None
+        assert len(session.turns) >= 1
+    finally:
+        db.close()
+
+
+def test_delete_interview_session_is_scoped_to_owner(client):
+    tokens_a = signup_and_get_tokens(client)
+    tokens_b = signup_and_get_tokens(client)
+    plan = _ready_plan(client, tokens_a["access_token"])
+    start = _start_session(client, tokens_a["access_token"], plan["id"])
+
+    response = client.delete(
+        f"/interview-sessions/{start['session_id']}",
+        headers={"Authorization": f"Bearer {tokens_b['access_token']}"},
+    )
+    assert response.status_code == 404

@@ -224,6 +224,17 @@ def get_interview_session(
     )
 
 
+@router.delete("/{session_id}", status_code=204)
+def delete_interview_session(
+    session_id: uuid.UUID,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    session = _get_session_or_404(db, session_id, current_user.id)
+    interview_session_repository.soft_delete(db, session)
+    db.commit()
+
+
 @router.get("/{session_id}/state", response_model=InterviewSessionStateOut)
 def get_interview_session_state(
     session_id: uuid.UUID,

@@ -211,7 +211,17 @@ def build_interview_graph(llm: LLMAdapter):
             done = False
             stop_reason = None
         else:
-            done = turn_index >= state["total_questions"] or not state["topic_queue"] or cost_cap_exceeded
+            # Completion is driven by main-topic-queue exhaustion, not
+            # turn_index: turn_index counts every turn (main + follow-up)
+            # while topic_queue only ever holds main-topic slots
+            # (generate_followup_node never pops it, only
+            # generate_question_node does). Comparing turn_index to
+            # total_questions here used to end sessions early as soon as any
+            # follow-up had been used, before topic_queue was actually
+            # empty - total_questions remains valid, descriptive data
+            # elsewhere (API responses, progress display); it's just not
+            # part of this check.
+            done = not state["topic_queue"] or cost_cap_exceeded
             stop_reason = "cost_cap_exceeded" if cost_cap_exceeded else ("completed" if done else None)
 
         return {

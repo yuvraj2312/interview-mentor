@@ -466,3 +466,7 @@ export interface InterviewSessionListItem {
 export async function listInterviewSessions(): Promise<InterviewSessionListItem[]> {
   return apiRequest<InterviewSessionListItem[]>('/interview-sessions')
 }
+
+export async function deleteInterviewSession(id: string): Promise<void> {
+  return apiRequest<void>(`/interview-sessions/${id}`, { method: 'DELETE' })
+}

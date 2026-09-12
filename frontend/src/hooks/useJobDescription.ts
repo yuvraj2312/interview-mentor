@@ -3,8 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createJobDescription, deleteJobDescription, getJobDescription, updateJobDescription } from '@/lib/api'
 
 export function useCreateJobDescription() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (rawText: string) => createJobDescription(rawText),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['job-descriptions'] })
+    },
   })
 }
 

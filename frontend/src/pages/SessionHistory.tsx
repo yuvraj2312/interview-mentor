@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { SessionStatusBadge } from '@/components/SessionStatusBadge'
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useDeleteInterviewSession } from '@/hooks/useDeleteInterviewSession'
 import { useInterviewSessions } from '@/hooks/useInterviewSessions'
 import { formatDate, formatDateTime, formatRelativeTime } from '@/lib/format'
 import type { InterviewSessionListItem } from '@/lib/api'
@@ -17,7 +19,14 @@ const LIVE_STATUSES = new Set(['in_progress', 'evaluating', 'advancing'])
 
 export function SessionHistoryPage() {
   const sessionsQuery = useInterviewSessions()
+  const deleteSession = useDeleteInterviewSession()
   const navigate = useNavigate()
+
+  function handleDeleteSession(id: string) {
+    if (window.confirm('Delete this interview session? Its roadmap and evaluations will be unaffected.')) {
+      deleteSession.mutate(id)
+    }
+  }
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-12">
@@ -63,6 +72,7 @@ export function SessionHistoryPage() {
                   <TableHead>Technical</TableHead>
                   <TableHead>Communication</TableHead>
                   <TableHead>Completeness</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -91,6 +101,20 @@ export function SessionHistoryPage() {
                     <TableCell>{formatScore(session.avg_technical_score)}</TableCell>
                     <TableCell>{formatScore(session.avg_communication_score)}</TableCell>
                     <TableCell>{formatScore(session.avg_completeness_score)}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="size-8 p-0"
+                        aria-label="Delete session"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleDeleteSession(session.session_id)
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

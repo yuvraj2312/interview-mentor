@@ -1,11 +1,16 @@
-import { BarChart3, Eye, ListChecks, Map, Rocket, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { BarChart3, Eye, ListChecks, Map, Plus, Rocket, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { ResourceStatusBadge } from '@/components/ResourceStatusBadge'
 import { SessionStatusBadge } from '@/components/SessionStatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { JobDescriptionStep } from '@/components/wizard/JobDescriptionStep'
+import { ResumeStep } from '@/components/wizard/ResumeStep'
+import { useDeleteInterviewSession } from '@/hooks/useDeleteInterviewSession'
 import { useInterviewSessions } from '@/hooks/useInterviewSessions'
 import { useJobDescriptions } from '@/hooks/useJobDescriptions'
 import { useDeleteJobDescription } from '@/hooks/useJobDescription'
@@ -14,6 +19,7 @@ import { useDeleteResume } from '@/hooks/useResume'
 import { formatDate } from '@/lib/format'
 
 const RECENT_LIMIT = 5
+const LIVE_STATUSES = new Set(['in_progress', 'evaluating', 'advancing'])
 
 const SECONDARY_LINKS = [
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
@@ -27,6 +33,12 @@ export function DashboardPage() {
   const sessionsQuery = useInterviewSessions()
   const deleteResume = useDeleteResume()
   const deleteJobDescription = useDeleteJobDescription()
+  const deleteSession = useDeleteInterviewSession()
+
+  const [resumeModalOpen, setResumeModalOpen] = useState(false)
+  const [resumeModalActiveId, setResumeModalActiveId] = useState<string | null>(null)
+  const [jdModalOpen, setJdModalOpen] = useState(false)
+  const [jdModalActiveId, setJdModalActiveId] = useState<string | null>(null)
 
   function handleDeleteResume(id: string, filename: string) {
     if (window.confirm(`Delete "${filename}"? Existing plans and sessions built from it will be unaffected.`)) {
@@ -38,6 +50,22 @@ export function DashboardPage() {
     if (window.confirm('Delete this job description? Existing plans and sessions built from it will be unaffected.')) {
       deleteJobDescription.mutate(id)
     }
+  }
+
+  function handleDeleteSession(id: string) {
+    if (window.confirm('Delete this interview session? Its roadmap and evaluations will be unaffected.')) {
+      deleteSession.mutate(id)
+    }
+  }
+
+  function closeResumeModal() {
+    setResumeModalOpen(false)
+    setResumeModalActiveId(null)
+  }
+
+  function closeJdModal() {
+    setJdModalOpen(false)
+    setJdModalActiveId(null)
   }
 
   return (
@@ -55,8 +83,12 @@ export function DashboardPage() {
 
       <div className="mt-16 grid gap-4 sm:grid-cols-3">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="text-base">Recent resumes</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setResumeModalOpen(true)}>
+              <Plus className="size-4" />
+              Upload
+            </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {resumesQuery.isLoading && (
@@ -97,8 +129,12 @@ export function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="text-base">Recent job descriptions</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setJdModalOpen(true)}>
+              <Plus className="size-4" />
+              Add
+            </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {jdsQuery.isLoading && (
@@ -155,7 +191,30 @@ export function DashboardPage() {
             {sessionsQuery.data?.slice(0, RECENT_LIMIT).map((session) => (
               <div key={session.session_id} className="flex items-center justify-between gap-2 py-1">
                 <p className="text-sm text-ink-900">{formatDate(session.created_at)}</p>
-                <SessionStatusBadge status={session.status} />
+                <div className="flex shrink-0 items-center gap-1">
+                  <SessionStatusBadge status={session.status} />
+                  <Button asChild variant="ghost" size="sm" className="size-8 p-0">
+                    <Link
+                      to={
+                        LIVE_STATUSES.has(session.status)
+                          ? `/interview-sessions/${session.session_id}/live`
+                          : `/interview-sessions/${session.session_id}`
+                      }
+                      aria-label="View session"
+                    >
+                      <Eye className="size-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-8 p-0"
+                    aria-label="Delete session"
+                    onClick={() => handleDeleteSession(session.session_id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
             ))}
             {sessionsQuery.data && sessionsQuery.data.length > 0 && (
@@ -177,6 +236,34 @@ export function DashboardPage() {
           </Button>
         ))}
       </div>
+
+      <Dialog open={resumeModalOpen} onOpenChange={(open) => (open ? setResumeModalOpen(true) : closeResumeModal())}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload a resume</DialogTitle>
+          </DialogHeader>
+          <ResumeStep
+            activeId={resumeModalActiveId}
+            onSelectExisting={setResumeModalActiveId}
+            onUploaded={setResumeModalActiveId}
+            onContinue={closeResumeModal}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={jdModalOpen} onOpenChange={(open) => (open ? setJdModalOpen(true) : closeJdModal())}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a job description</DialogTitle>
+          </DialogHeader>
+          <JobDescriptionStep
+            activeId={jdModalActiveId}
+            onSelectExisting={setJdModalActiveId}
+            onCreated={setJdModalActiveId}
+            onContinue={closeJdModal}
+          />
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

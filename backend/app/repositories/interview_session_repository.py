@@ -48,12 +48,19 @@ def get_by_id_for_user(db: DBSession, session_id: uuid.UUID, user_id: uuid.UUID)
 def list_for_user(db: DBSession, user_id: uuid.UUID, limit: int = 50) -> list[InterviewSession]:
     return (
         db.query(InterviewSession)
-        .filter(InterviewSession.user_id == user_id)
+        .filter(InterviewSession.user_id == user_id, InterviewSession.deleted_at.is_(None))
         .options(selectinload(InterviewSession.turns))
         .order_by(InterviewSession.created_at.desc())
         .limit(limit)
         .all()
     )
+
+
+def soft_delete(db: DBSession, session: InterviewSession) -> InterviewSession:
+    session.deleted_at = datetime.now(timezone.utc)
+    db.add(session)
+    db.flush()
+    return session
 
 
 def advance(
