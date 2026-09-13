@@ -8,6 +8,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/format'
 
+function hasItems(value: unknown): value is unknown[] {
+  return Array.isArray(value) && value.length > 0
+}
+
+function StructuredListSection({ label, value, emptyLabel }: { label: string; value: unknown; emptyLabel: string }) {
+  return (
+    <div>
+      <p className="text-sm font-medium text-ink-900">{label}</p>
+      {hasItems(value) ? (
+        <pre className="mt-2 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs text-ink-600">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ) : (
+        <p className="mt-2 text-sm text-ink-400">{emptyLabel}</p>
+      )}
+    </div>
+  )
+}
+
 export function ResumeDetailPage() {
   const { resumeId } = useParams<{ resumeId: string }>()
   const resumeQuery = useResumeQuery(resumeId)
@@ -50,32 +69,33 @@ export function ResumeDetailPage() {
               <>
                 <div>
                   <p className="text-sm font-medium text-ink-900">Skills</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(structuredData.skills ?? []).map((skill) => (
-                      <Badge key={skill} variant="outline">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
+                  {structuredData.skills && structuredData.skills.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {structuredData.skills.map((skill) => (
+                        <Badge key={skill} variant="outline">
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-ink-400">No skills listed</p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-ink-900">Experience</p>
-                  <pre className="mt-2 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs text-ink-600">
-                    {JSON.stringify(structuredData.experience ?? [], null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-ink-900">Education</p>
-                  <pre className="mt-2 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs text-ink-600">
-                    {JSON.stringify(structuredData.education ?? [], null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-ink-900">Projects</p>
-                  <pre className="mt-2 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs text-ink-600">
-                    {JSON.stringify(structuredData.projects ?? [], null, 2)}
-                  </pre>
-                </div>
+                <StructuredListSection
+                  label="Experience"
+                  value={structuredData.experience}
+                  emptyLabel="No experience listed"
+                />
+                <StructuredListSection
+                  label="Education"
+                  value={structuredData.education}
+                  emptyLabel="No education listed"
+                />
+                <StructuredListSection
+                  label="Projects"
+                  value={structuredData.projects}
+                  emptyLabel="No projects listed"
+                />
               </>
             )}
             {!structuredData && resumeQuery.data.status !== 'failed' && (

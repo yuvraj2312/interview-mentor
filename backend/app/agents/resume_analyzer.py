@@ -9,6 +9,7 @@ from app.prompts import RESUME_ANALYSIS_PROMPT
 from app.utils.json_parsing import parse_llm_json
 
 REQUIRED_KEYS = ("skills", "experience", "education", "projects", "low_confidence_fields")
+LIST_KEYS = ("skills", "experience", "education", "projects", "low_confidence_fields")
 
 
 def analyze_resume(llm: LLMAdapter, resume_text: str) -> dict:
@@ -22,4 +23,13 @@ def analyze_resume(llm: LLMAdapter, resume_text: str) -> dict:
 
     if not isinstance(result, dict) or not all(k in result for k in REQUIRED_KEYS):
         raise ValueError(f"Malformed resume analysis object: {result!r}")
+
+    # A genuinely empty section must come back as [], never None/omitted -
+    # every downstream consumer (this system's own API responses, the
+    # frontend, skill_gap_service's .get(key, []) calls) treats a present
+    # empty list as "no data" and a null as an error condition, so null must
+    # never leave this boundary (see 2026-09-13 empty-array display bug).
+    for key in LIST_KEYS:
+        if result[key] is None:
+            result[key] = []
     return result
