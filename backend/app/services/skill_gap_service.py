@@ -19,6 +19,7 @@ embeddings alone gets a small, targeted LLM judgment call instead of being
 silently dropped. This function's output shape is unchanged from Phase 2.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from math import sqrt
 
 from app.agents.skill_matcher import llm_fallback_match
@@ -54,6 +55,15 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
 # compromise that already covers every case found during that
 # investigation (the true match ranked 2nd or 3rd in each case).
 AMBIGUOUS_CANDIDATES_PER_JD_SKILL = 3
+
+# Bound on how many unmatched JD skills get their (sequential) candidate
+# scan run concurrently in _llm_fallback_pass. Each JD skill's own scan
+# stays sequential (see _check_candidates_for_jd_skill) since its
+# early-break is a real cost-saving dependency; only the scans for
+# different JD skills - which share no state - run in parallel. Capped
+# rather than unbounded so a JD with dozens of unmatched skills doesn't
+# open dozens of simultaneous connections to the LLM provider at once.
+MAX_FALLBACK_WORKERS = 8
 
 
 def _semantic_match(
@@ -101,6 +111,20 @@ def _semantic_match(
     return matched, ambiguous_candidates
 
 
+def _check_candidates_for_jd_skill(llm_adapter: LLMAdapter, jd_text: str, candidates: list[str]) -> bool:
+    for resume_text in candidates:
+        try:
+            if llm_fallback_match(llm_adapter, jd_skill=jd_text, resume_skill=resume_text):
+                return True  # one confirmed match is enough; skip the rest
+        except Exception:
+            # Fail open per-candidate: worst case this one candidate
+            # contributes nothing, same as if it had never cleared the
+            # floor. This is a best-effort enrichment call, never
+            # session/request-blocking.
+            continue
+    return False
+
+
 def _llm_fallback_pass(
     llm_adapter: LLMAdapter, jd_lookup: dict[str, str], ambiguous_candidates: dict[str, list[str]]
 ) -> set[str]:
@@ -116,21 +140,19 @@ def _llm_fallback_pass(
     # a named risk") and isn't something a single LLM call can fully
     # eliminate - accepted here as an inherent characteristic of this
     # design rather than something to engineer around.
-    matched = set()
-    for norm, candidates in ambiguous_candidates.items():
-        jd_text = jd_lookup[norm]
-        for resume_text in candidates:
-            try:
-                if llm_fallback_match(llm_adapter, jd_skill=jd_text, resume_skill=resume_text):
-                    matched.add(norm)
-                    break  # one confirmed match is enough; skip the rest
-            except Exception:
-                # Fail open per-candidate: worst case this one candidate
-                # contributes nothing, same as if it had never cleared the
-                # floor. This is a best-effort enrichment call, never
-                # session/request-blocking.
-                continue
-    return matched
+    if not ambiguous_candidates:
+        return set()
+
+    # Each JD skill's own candidate scan stays sequential (its early-break
+    # is a real data dependency - see _check_candidates_for_jd_skill), but
+    # different JD skills' scans share no state, so they run concurrently
+    # here to overlap their network latency instead of stacking it up.
+    with ThreadPoolExecutor(max_workers=min(MAX_FALLBACK_WORKERS, len(ambiguous_candidates))) as executor:
+        futures = {
+            norm: executor.submit(_check_candidates_for_jd_skill, llm_adapter, jd_lookup[norm], candidates)
+            for norm, candidates in ambiguous_candidates.items()
+        }
+        return {norm for norm, future in futures.items() if future.result()}
 
 
 def compute(

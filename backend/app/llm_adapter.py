@@ -12,6 +12,7 @@ bolted onto each agent separately.
 """
 
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -61,6 +62,13 @@ class AnthropicAdapter(LLMAdapter):
         self._db = db
         self._session_id = session_id
         self.last_usage = None
+        # Guards self._db (a SQLAlchemy Session, not safe for concurrent
+        # use) and self.last_usage for callers that run generate() from
+        # multiple threads against one adapter instance (e.g. the
+        # skill-gap LLM fallback pass). The network call itself is
+        # intentionally made outside this lock so concurrent callers still
+        # overlap on the slow part.
+        self._lock = threading.Lock()
 
     def generate(
         self, prompt: str, *, agent_name: str, temperature: float = 0.7, max_tokens: int = 1024
@@ -75,23 +83,24 @@ class AnthropicAdapter(LLMAdapter):
             )
         except Exception as exc:
             latency_ms = int((time.monotonic() - started) * 1000)
-            self.last_usage = None
-            llm_call_repository.create(
-                self._db,
-                agent_name=agent_name,
-                session_id=self._session_id,
-                model=self._model,
-                prompt=prompt,
-                response=None,
-                input_tokens=None,
-                output_tokens=None,
-                latency_ms=latency_ms,
-                cost_usd=None,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                status="error",
-                error_message=str(exc),
-            )
+            with self._lock:
+                self.last_usage = None
+                llm_call_repository.create(
+                    self._db,
+                    agent_name=agent_name,
+                    session_id=self._session_id,
+                    model=self._model,
+                    prompt=prompt,
+                    response=None,
+                    input_tokens=None,
+                    output_tokens=None,
+                    latency_ms=latency_ms,
+                    cost_usd=None,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    status="error",
+                    error_message=str(exc),
+                )
             logger.error(
                 "llm_call agent=%s model=%s status=error latency_ms=%d error=%s",
                 agent_name,
@@ -108,29 +117,30 @@ class AnthropicAdapter(LLMAdapter):
         output_tokens = response.usage.output_tokens
         cost_usd = estimate_cost_usd(self._model, input_tokens, output_tokens)
 
-        self.last_usage = LLMCallUsage(
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost_usd=cost_usd,
-            latency_ms=latency_ms,
-        )
+        with self._lock:
+            self.last_usage = LLMCallUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=cost_usd,
+                latency_ms=latency_ms,
+            )
 
-        llm_call_repository.create(
-            self._db,
-            agent_name=agent_name,
-            session_id=self._session_id,
-            model=self._model,
-            prompt=prompt,
-            response=text,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            latency_ms=latency_ms,
-            cost_usd=cost_usd,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            status="success",
-            error_message=None,
-        )
+            llm_call_repository.create(
+                self._db,
+                agent_name=agent_name,
+                session_id=self._session_id,
+                model=self._model,
+                prompt=prompt,
+                response=text,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                cost_usd=cost_usd,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                status="success",
+                error_message=None,
+            )
         logger.info(
             "llm_call agent=%s model=%s status=success latency_ms=%d input_tokens=%d output_tokens=%d cost_usd=%.6f",
             agent_name,
