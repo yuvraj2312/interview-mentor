@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useBlocker, useNavigate } from 'react-router-dom'
 
 import { FormatStep } from '@/components/wizard/FormatStep'
 import { JobDescriptionStep } from '@/components/wizard/JobDescriptionStep'
@@ -8,6 +8,7 @@ import { ResumeStep } from '@/components/wizard/ResumeStep'
 import { SkillGapStep } from '@/components/wizard/SkillGapStep'
 import { StepIndicator } from '@/components/wizard/StepIndicator'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useComputeSkillGap } from '@/hooks/useSkillGap'
 import { useGenerateInterviewPlan } from '@/hooks/useInterviewPlan'
 import { useStartInterviewSession } from '@/hooks/useInterviewSession'
@@ -50,6 +51,23 @@ export function StartInterviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume?.id, resume?.status, jd?.id, jd?.status])
 
+  // Skill-gap computation can take anywhere from a few seconds to over a
+  // minute (see skill_gap_service.py) - warn before losing it rather than
+  // silently abandoning the in-flight request, mirroring the live
+  // interview's "leave interview?" guard (LiveInterview.tsx) without fully
+  // blocking navigation.
+  useEffect(() => {
+    if (!skillGap.isPending) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [skillGap.isPending])
+
+  const blocker = useBlocker(skillGap.isPending)
+
   async function handleGeneratePlan() {
     if (!skillGap.data) return
     const generated = await generatePlan.mutateAsync({ skillGapAnalysisId: skillGap.data.id, format })
@@ -73,6 +91,24 @@ export function StartInterviewPage() {
       <div className="mb-8">
         <StepIndicator steps={STEPS} currentStep={step} />
       </div>
+
+      {blocker.state === 'blocked' && (
+        <Card className="mb-6 border-l-4 border-l-warning-600">
+          <CardHeader>
+            <CardTitle>Leave before the comparison finishes?</CardTitle>
+            <CardDescription>
+              Your resume and job description are still being compared - leaving now will lose this result and
+              you'll need to redo it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex gap-2">
+            <Button variant="outline" onClick={() => blocker.reset()}>
+              Stay
+            </Button>
+            <Button onClick={() => blocker.proceed()}>Leave</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {step === 1 && (
         <ResumeStep
