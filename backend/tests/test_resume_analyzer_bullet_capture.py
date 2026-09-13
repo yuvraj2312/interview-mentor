@@ -194,3 +194,43 @@ def test_bullets_are_not_cut_off_at_the_first_clause():
     # The 4th bullet of this role has no semicolon at all - its mere
     # presence proves capture didn't stop after the first two bullets.
     assert ANALYST_BULLETS[3] in analyst["description"]
+
+
+class _NullSectionsLLM(LLMAdapter):
+    """Returns valid JSON but with `null` for every list-typed section -
+    exercises how analyze_resume handles a genuinely-empty section, since
+    the prompt's example shape can't force the model to always emit []
+    rather than null (2026-09-13 empty-array display bug investigation)."""
+
+    def __init__(self):
+        self.last_usage = None
+
+    def generate(self, prompt, *, agent_name, temperature=0.7, max_tokens=1024):
+        import json
+
+        return json.dumps(
+            {
+                "skills": None,
+                "experience": None,
+                "education": None,
+                "projects": None,
+                "low_confidence_fields": None,
+            }
+        )
+
+
+def test_null_sections_are_normalized_to_empty_lists_not_left_as_none():
+    # A resume with a genuinely empty section (e.g. no projects listed) must
+    # never surface as None/null anywhere downstream - every consumer
+    # (this system's own API responses, the frontend, skill_gap_service's
+    # .get(key, []) calls) treats a present empty list as "no data" and a
+    # null as an error condition.
+    llm = _NullSectionsLLM()
+
+    result = analyze_resume(llm, "irrelevant - the fake LLM ignores the prompt")
+
+    assert result["skills"] == []
+    assert result["experience"] == []
+    assert result["education"] == []
+    assert result["projects"] == []
+    assert result["low_confidence_fields"] == []

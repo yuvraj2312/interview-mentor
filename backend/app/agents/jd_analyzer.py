@@ -9,6 +9,7 @@ from app.prompts import JD_ANALYSIS_PROMPT
 from app.utils.json_parsing import parse_llm_json
 
 REQUIRED_KEYS = ("required_skills", "preferred_skills", "seniority_level", "low_confidence_fields")
+LIST_KEYS = ("required_skills", "preferred_skills", "low_confidence_fields")
 
 
 def analyze_job_description(llm: LLMAdapter, jd_text: str) -> dict:
@@ -18,4 +19,12 @@ def analyze_job_description(llm: LLMAdapter, jd_text: str) -> dict:
 
     if not isinstance(result, dict) or not all(k in result for k in REQUIRED_KEYS):
         raise ValueError(f"Malformed JD analysis object: {result!r}")
+
+    # Same boundary-normalization as resume_analyzer.py: a genuinely empty
+    # list must come back as [], never None, so skill_gap_service's
+    # .get(key, []) (which only defaults on a MISSING key, not an explicit
+    # None) can't blow up downstream.
+    for key in LIST_KEYS:
+        if result[key] is None:
+            result[key] = []
     return result

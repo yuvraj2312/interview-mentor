@@ -16,12 +16,7 @@ from app.agents.resume_analyzer import analyze_resume
 from app.llm_adapter import get_llm_adapter
 from app.repositories import resume_repository
 from app.storage import build_resume_object_key, download_resume_file, upload_resume_file
-from app.utils.file_parsing import extract_text
-
-SUPPORTED_CONTENT_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
+from app.utils.file_parsing import SUPPORTED_CONTENT_TYPES, extract_text
 
 
 async def initiate_upload(
