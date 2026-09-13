@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.deps import get_current_user
@@ -69,6 +69,22 @@ def create_job_description(
 ) -> JobDescriptionOut:
     try:
         jd = job_description_service.create_and_analyze(db, user_id=current_user.id, raw_text=payload.raw_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM returned an unusable response: {exc}") from exc
+    return _to_out(jd)
+
+
+@router.post("/upload", response_model=JobDescriptionOut, status_code=201)
+async def upload_job_description(
+    file: UploadFile,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> JobDescriptionOut:
+    file_bytes = await file.read()
+    try:
+        jd = job_description_service.upload_and_analyze(
+            db, user_id=current_user.id, content_type=file.content_type or "", file_bytes=file_bytes
+        )
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"LLM returned an unusable response: {exc}") from exc
     return _to_out(jd)

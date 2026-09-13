@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react'
 
 import { useJobDescriptions } from '@/hooks/useJobDescriptions'
-import { useCreateJobDescription, useJobDescriptionQuery, useUpdateJobDescription } from '@/hooks/useJobDescription'
+import {
+  useCreateJobDescription,
+  useJobDescriptionQuery,
+  useUpdateJobDescription,
+  useUploadJobDescription,
+} from '@/hooks/useJobDescription'
 import { ResourceStatusBadge } from '@/components/ResourceStatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { FileDropzone } from '@/components/ui/file-dropzone'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -31,12 +37,14 @@ interface JobDescriptionStepProps {
 }
 
 export function JobDescriptionStep({ activeId, onSelectExisting, onCreated, onContinue }: JobDescriptionStepProps) {
-  const [mode, setMode] = useState<'choose' | 'paste'>('choose')
+  const [mode, setMode] = useState<'choose' | 'paste' | 'upload'>('choose')
   const [rawText, setRawText] = useState('')
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
 
   const jdsQuery = useJobDescriptions()
   const activeJdQuery = useJobDescriptionQuery(activeId ?? undefined)
   const create = useCreateJobDescription()
+  const upload = useUploadJobDescription()
   const update = useUpdateJobDescription(activeId ?? '')
 
   const [requiredText, setRequiredText] = useState('')
@@ -62,6 +70,12 @@ export function JobDescriptionStep({ activeId, onSelectExisting, onCreated, onCo
   async function handleCreate() {
     if (!rawText.trim()) return
     const jd = await create.mutateAsync(rawText)
+    onCreated(jd.id)
+  }
+
+  async function handleUpload() {
+    if (!pendingFile) return
+    const jd = await upload.mutateAsync(pendingFile)
     onCreated(jd.id)
   }
 
@@ -207,9 +221,14 @@ export function JobDescriptionStep({ activeId, onSelectExisting, onCreated, onCo
             {jdsQuery.data && jdsQuery.data.length === 0 && (
               <p className="text-sm text-ink-400">You don't have any job descriptions yet.</p>
             )}
-            <Button variant="outline" onClick={() => setMode('paste')} className="w-fit">
-              Paste a new job description
-            </Button>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setMode('paste')} className="w-fit">
+                Paste a new job description
+              </Button>
+              <Button variant="outline" onClick={() => setMode('upload')} className="w-fit">
+                Upload a file instead
+              </Button>
+            </div>
           </>
         )}
 
@@ -225,6 +244,29 @@ export function JobDescriptionStep({ activeId, onSelectExisting, onCreated, onCo
             <div className="flex gap-3">
               <Button onClick={handleCreate} disabled={!rawText.trim() || create.isPending}>
                 {create.isPending ? 'Analyzing...' : 'Analyze'}
+              </Button>
+              <Button variant="outline" onClick={() => setMode('upload')}>
+                Upload a file instead
+              </Button>
+              {jdsQuery.data && jdsQuery.data.length > 0 && (
+                <Button variant="outline" onClick={() => setMode('choose')}>
+                  Choose an existing one instead
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+
+        {mode === 'upload' && (
+          <>
+            <FileDropzone value={pendingFile} onChange={setPendingFile} accept=".pdf,.docx" hint="PDF or DOCX, up to 10MB" />
+            {upload.isError && <p className="text-sm text-danger-600">Upload failed. Please try again.</p>}
+            <div className="flex gap-3">
+              <Button onClick={handleUpload} disabled={!pendingFile || upload.isPending}>
+                {upload.isPending ? 'Analyzing...' : 'Upload'}
+              </Button>
+              <Button variant="outline" onClick={() => setMode('paste')}>
+                Paste text instead
               </Button>
               {jdsQuery.data && jdsQuery.data.length > 0 && (
                 <Button variant="outline" onClick={() => setMode('choose')}>

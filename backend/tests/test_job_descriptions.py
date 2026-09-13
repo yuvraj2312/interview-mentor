@@ -1,6 +1,11 @@
+import io
 from unittest.mock import patch
 
+from docx import Document
+
 from tests.conftest import signup_and_get_tokens
+
+DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 FAKE_ANALYSIS = {
     "required_skills": ["Python", "PostgreSQL"],
@@ -73,6 +78,48 @@ def test_patch_job_description_updates_structured_data(client):
     body = response.json()
     assert body["structured_data"]["seniority_level"] == "mid"
     assert body["low_confidence_fields"] == []
+
+
+def _sample_jd_docx_bytes() -> bytes:
+    doc = Document()
+    doc.add_paragraph("Senior Backend Engineer")
+    doc.add_paragraph("We need a senior Python engineer with PostgreSQL experience.")
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_upload_job_description_requires_auth(client):
+    response = client.post(
+        "/job-descriptions/upload", files={"file": ("jd.docx", _sample_jd_docx_bytes(), DOCX_CONTENT_TYPE)}
+    )
+    assert response.status_code == 401
+
+
+def test_upload_job_description_rejects_unsupported_content_type(client):
+    tokens = signup_and_get_tokens(client)
+    response = client.post(
+        "/job-descriptions/upload",
+        files={"file": ("jd.txt", b"not a jd", "text/plain")},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert response.status_code == 400
+
+
+def test_upload_job_description_extracts_text_and_analyzes_synchronously(client):
+    tokens = signup_and_get_tokens(client)
+    with patch("app.services.job_description_service.analyze_job_description", return_value=FAKE_ANALYSIS):
+        response = client.post(
+            "/job-descriptions/upload",
+            files={"file": ("jd.docx", _sample_jd_docx_bytes(), DOCX_CONTENT_TYPE)},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["structured_data"]["required_skills"] == ["Python", "PostgreSQL"]
+    assert "Senior Backend Engineer" in body["raw_text"]
+    assert "PostgreSQL" in body["raw_text"]
 
 
 def test_list_job_descriptions_empty_for_new_user(client):

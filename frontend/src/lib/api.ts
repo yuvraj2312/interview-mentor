@@ -172,6 +172,12 @@ export async function createJobDescription(rawText: string): Promise<JobDescript
   })
 }
 
+export async function uploadJobDescription(file: File): Promise<JobDescriptionOut> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiRequest<JobDescriptionOut>('/job-descriptions/upload', { method: 'POST', body: formData })
+}
+
 export async function getJobDescription(id: string): Promise<JobDescriptionOut> {
   return apiRequest<JobDescriptionOut>(`/job-descriptions/${id}`)
 }
