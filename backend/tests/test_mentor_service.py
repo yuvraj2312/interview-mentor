@@ -128,6 +128,59 @@ class TestGenerateRoadmapForSession:
         finally:
             db.close()
 
+    def test_out_of_domain_item_gets_no_matches_instead_of_a_forced_padded_top_3(self, client):
+        # Regression test for the 2026-09-13 "Continuous Delivery"
+        # over-recommendation investigation: a query with no genuinely
+        # relevant resource in the KB must come back with an empty
+        # matched_resources, not padded with the least-bad available hit.
+        # Real embedding adapter + real (throwaway) Qdrant collection, per
+        # this file's convention - scores for these exact strings were
+        # verified live (0.82 on-topic vs. 0.58 off-topic) to sit cleanly on
+        # either side of the 0.6 threshold before writing this assertion.
+        self._seed_test_resource()
+        user_id, plan_id = _setup_user_and_plan(client)
+        session_id = _seed_completed_session(
+            user_id,
+            plan_id,
+            [("System Design", 8.0, 8.0, 8.0), ("Python Fundamentals", 3.0, 5.0, 4.0)],
+            completed_at=_BASE_TIME,
+        )
+        _recompute_skill_profile(user_id)
+
+        result_with_out_of_domain_item = {
+            **CANNED_RESULT,
+            "roadmap_items": [
+                *CANNED_RESULT["roadmap_items"],
+                {
+                    "topic": "Corporate credit rating methodology",
+                    "gap_description": (
+                        "The candidate could not explain how sectoral risk factors feed into a corporate "
+                        "credit rating assessment."
+                    ),
+                    "priority": "medium",
+                    "recommended_action": "Review corporate credit rating frameworks.",
+                },
+            ],
+        }
+
+        with patch("app.services.mentor_service.generate_roadmap", return_value=result_with_out_of_domain_item):
+            _generate(session_id)
+
+        db = TestSessionLocal()
+        try:
+            roadmap = roadmap_repository.get_latest_for_user(db, user_id)
+            items = {item.topic: item for item in roadmap.items}
+            assert len(items) == 2
+
+            on_topic = items["Python generators"]
+            assert len(on_topic.matched_resources) == 1
+            assert on_topic.matched_resources[0]["resource_id"] == "test-python-generators"
+
+            out_of_domain = items["Corporate credit rating methodology"]
+            assert out_of_domain.matched_resources == []
+        finally:
+            db.close()
+
     def test_second_session_creates_a_second_roadmap(self, client):
         self._seed_test_resource()
         user_id, plan_id = _setup_user_and_plan(client)

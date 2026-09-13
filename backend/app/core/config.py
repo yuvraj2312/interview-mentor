@@ -42,7 +42,20 @@ class Settings(BaseSettings):
     # the actual discrimination for everything above it.
     skill_match_ambiguous_floor: float = 0.35
     skill_trend_delta_threshold: float = 0.5
-    learning_resource_similarity_threshold: float = 0.3
+    # 0.6, not the original 0.3 (2026-09-13 investigation into
+    # "Continuous Delivery"/"RESTful Web APIs" being over-recommended
+    # across unrelated roadmap items): the 10-resource seed KB
+    # (learning_resources_seed.py) has zero non-tech-domain coverage, and at
+    # 0.3 an out-of-domain query still always returned its "least-bad" 3
+    # hits instead of correctly returning few/none - those hub-like
+    # resources (highest average cosine similarity across a diverse set of
+    # real queries, confirmed by direct embedding computation) then won a
+    # disproportionate share of every roadmap's resource slots. Threshold
+    # is data-justified, not guessed: across 21 real roadmap items, every
+    # genuinely-relevant match's top score was >= 0.634, while every
+    # confirmed-irrelevant out-of-domain match scored <= 0.576 - 0.6 sits
+    # cleanly in that gap.
+    learning_resource_similarity_threshold: float = 0.6
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
