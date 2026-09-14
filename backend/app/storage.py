@@ -10,6 +10,7 @@ import uuid
 
 import boto3
 from botocore.client import Config
+from botocore.exceptions import ClientError
 
 from app.core.config import settings
 
@@ -26,10 +27,23 @@ def get_s3_client():
 
 
 def ensure_bucket_exists() -> None:
+    # Uses head_bucket, not list_buckets: list_buckets is an account-level S3
+    # operation that a bucket-scoped R2 API token (Object Read & Write on a
+    # single bucket, the recommended least-privilege setup) is not permitted
+    # to call, and fails with AccessDenied even though the token is otherwise
+    # valid. head_bucket only needs permission on this one bucket, so it
+    # works with a scoped token. A scoped R2 token is created against an
+    # existing bucket, so create_bucket below is mainly for local MinIO dev,
+    # where the bucket may not exist yet.
     client = get_s3_client()
-    existing = {b["Name"] for b in client.list_buckets().get("Buckets", [])}
-    if settings.minio_bucket_name not in existing:
-        client.create_bucket(Bucket=settings.minio_bucket_name)
+    try:
+        client.head_bucket(Bucket=settings.minio_bucket_name)
+    except ClientError as exc:
+        error_code = exc.response.get("Error", {}).get("Code")
+        if error_code in ("404", "NoSuchBucket"):
+            client.create_bucket(Bucket=settings.minio_bucket_name)
+        else:
+            raise
 
 
 def build_resume_object_key(user_id: uuid.UUID, resume_id: uuid.UUID, filename: str) -> str:
