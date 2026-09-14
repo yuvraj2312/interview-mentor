@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
 
+import { IdleTimeoutManager } from '@/components/IdleTimeoutManager'
 import { useAuthStore } from '@/store/authStore'
 
 export function ProtectedRoute() {
@@ -16,5 +17,10 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace />
   }
 
-  return <Outlet />
+  return (
+    <>
+      <IdleTimeoutManager />
+      <Outlet />
+    </>
+  )
 }

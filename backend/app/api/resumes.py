@@ -4,6 +4,7 @@ from arq import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session as DBSession
 
+from app.core.config import settings
 from app.core.deps import get_arq_pool, get_current_user
 from app.db import get_db
 from app.models import Resume, User
@@ -59,7 +60,17 @@ async def upload_resume(
     arq_pool: ArqRedis = Depends(get_arq_pool),
     current_user: User = Depends(get_current_user),
 ) -> ResumeOut:
+    # FastAPI/Starlette already fully receives the multipart body (into
+    # memory or a spooled temp file) before this function runs at all, so
+    # this check bounds what gets stored, not what gets received - see the
+    # comment on Settings.resume_max_upload_bytes.
     file_bytes = await file.read()
+    if len(file_bytes) > settings.resume_max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Resume file exceeds the {settings.resume_max_upload_bytes // (1024 * 1024)}MB limit.",
+        )
+
     resume = await resume_service.initiate_upload(
         db,
         arq_pool,

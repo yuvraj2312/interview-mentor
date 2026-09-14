@@ -18,25 +18,43 @@ interface TokenResponse {
 
 async function rawRequest(path: string, init?: RequestInit): Promise<Response> {
   const isFormData = init?.body instanceof FormData
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      // FormData bodies must not set Content-Type manually - the browser
-      // needs to add its own multipart boundary.
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      ...init?.headers,
-    },
-  })
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        // FormData bodies must not set Content-Type manually - the browser
+        // needs to add its own multipart boundary.
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...init?.headers,
+      },
+    })
+  } catch {
+    // fetch() itself throws (not a non-2xx response) when the server is
+    // unreachable entirely - no connection, DNS failure, etc. Without this,
+    // that raw TypeError would propagate uncaught past every ApiError-aware
+    // caller. Status 0 is a sentinel meaning "no HTTP response was ever
+    // received" - real HTTP statuses start at 100.
+    throw new ApiError(0, 'Unable to reach the server. Please check your connection and try again.')
+  }
 }
 
 async function tryRefresh(): Promise<boolean> {
   const { refreshToken, setTokens, clearTokens } = useAuthStore.getState()
   if (!refreshToken) return false
 
-  const response = await rawRequest('/auth/refresh', {
-    method: 'POST',
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  })
+  let response: Response
+  try {
+    response = await rawRequest('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+  } catch {
+    // Network-level failure (server unreachable) - don't clear tokens, the
+    // refresh token itself may still be perfectly valid, the server just
+    // didn't respond. Report "not refreshed" so the caller can retry later
+    // instead of permanently logging the user out for a transient outage.
+    return false
+  }
 
   if (!response.ok) {
     clearTokens()

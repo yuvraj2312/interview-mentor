@@ -55,6 +55,19 @@ def redis_client():
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    # Without this, the existing test suite's rapid-fire auth calls (many
+    # signup/login calls within the same minute, all from TestClient's fixed
+    # "testclient" IP) would start tripping the real rate limits and failing
+    # unrelated tests, since the limiter's Redis-backed counters persist
+    # across tests otherwise.
+    from app.core.rate_limit import limiter
+
+    limiter.reset()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _ws_db_override(monkeypatch):
     # The WebSocket handler can't use Depends(get_db) (see
     # app/websockets/interview_session_ws.py's module docstring) - it opens

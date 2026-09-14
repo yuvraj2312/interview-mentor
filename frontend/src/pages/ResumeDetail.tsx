@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ResourceStatusBadge } from '@/components/ResourceStatusBadge'
@@ -6,20 +7,26 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EducationCard, ExperienceCard, ProjectCard } from '@/components/ResumeEntryCard'
 import { formatDate } from '@/lib/format'
+import type { ResumeStructuredData } from '@/types/resume'
 
-function hasItems(value: unknown): value is unknown[] {
-  return Array.isArray(value) && value.length > 0
-}
-
-function StructuredListSection({ label, value, emptyLabel }: { label: string; value: unknown; emptyLabel: string }) {
+function StructuredListSection<T>({
+  label,
+  entries,
+  emptyLabel,
+  renderEntry,
+}: {
+  label: string
+  entries: T[] | undefined
+  emptyLabel: string
+  renderEntry: (entry: T, index: number) => ReactNode
+}) {
   return (
     <div>
       <p className="text-sm font-medium text-ink-900">{label}</p>
-      {hasItems(value) ? (
-        <pre className="mt-2 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs text-ink-600">
-          {JSON.stringify(value, null, 2)}
-        </pre>
+      {entries && entries.length > 0 ? (
+        <div className="mt-2 flex flex-col gap-3">{entries.map(renderEntry)}</div>
       ) : (
         <p className="mt-2 text-sm text-ink-400">{emptyLabel}</p>
       )}
@@ -31,10 +38,7 @@ export function ResumeDetailPage() {
   const { resumeId } = useParams<{ resumeId: string }>()
   const resumeQuery = useResumeQuery(resumeId)
 
-  const structuredData = resumeQuery.data?.structured_data as
-    | { skills?: string[]; experience?: unknown; education?: unknown; projects?: unknown }
-    | null
-    | undefined
+  const structuredData = resumeQuery.data?.structured_data as ResumeStructuredData | null | undefined
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-12">
@@ -83,18 +87,21 @@ export function ResumeDetailPage() {
                 </div>
                 <StructuredListSection
                   label="Experience"
-                  value={structuredData.experience}
+                  entries={structuredData.experience}
                   emptyLabel="No experience listed"
+                  renderEntry={(entry, index) => <ExperienceCard key={index} entry={entry} />}
                 />
                 <StructuredListSection
                   label="Education"
-                  value={structuredData.education}
+                  entries={structuredData.education}
                   emptyLabel="No education listed"
+                  renderEntry={(entry, index) => <EducationCard key={index} entry={entry} />}
                 />
                 <StructuredListSection
                   label="Projects"
-                  value={structuredData.projects}
+                  entries={structuredData.projects}
                   emptyLabel="No projects listed"
+                  renderEntry={(entry, index) => <ProjectCard key={index} entry={entry} />}
                 />
               </>
             )}

@@ -21,3 +21,8 @@ class RefreshToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # Shared across an entire login's rotation chain (same value copied
+    # forward on each /auth/refresh) so the absolute session cap can be
+    # measured from the original login, not reset by rotation.
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), default=uuid.uuid4, index=True)
+    session_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

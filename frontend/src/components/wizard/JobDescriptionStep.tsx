@@ -8,6 +8,8 @@ import {
   useUploadJobDescription,
 } from '@/hooks/useJobDescription'
 import { ResourceStatusBadge } from '@/components/ResourceStatusBadge'
+import { LowConfidenceBadge } from '@/components/wizard/LowConfidenceBadge'
+import { SparseDataBanner } from '@/components/wizard/SparseDataBanner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { FileDropzone } from '@/components/ui/file-dropzone'
@@ -17,17 +19,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { isResourceReady } from '@/lib/resourceStatus'
+import { getJdGapMessage } from '@/lib/extractionQuality'
 import type { JobDescriptionOut } from '@/lib/api'
-
-function LowConfidenceBadge({ field, flagged }: { field: string; flagged: string[] }) {
-  const isFlagged = flagged.some((f) => f.startsWith(field))
-  if (!isFlagged) return null
-  return (
-    <span className="ml-2 rounded-full bg-warning-50 px-2 py-0.5 text-xs font-medium text-warning-700">
-      Please review
-    </span>
-  )
-}
 
 interface JobDescriptionStepProps {
   activeId: string | null
@@ -104,6 +97,9 @@ export function JobDescriptionStep({ activeId, onSelectExisting, onCreated, onCo
 
   const flagged = activeJdQuery.data?.low_confidence_fields ?? []
   const activeIsReady = activeJdQuery.data ? isResourceReady(activeJdQuery.data.status) : false
+  const gapMessage = getJdGapMessage(
+    activeJdQuery.data?.structured_data as { required_skills?: string[]; seniority_level?: string } | null,
+  )
 
   if (activeId) {
     return (
@@ -124,6 +120,7 @@ export function JobDescriptionStep({ activeId, onSelectExisting, onCreated, onCo
 
           {activeIsReady && activeJdQuery.data && (
             <>
+              {gapMessage && <SparseDataBanner message={gapMessage} />}
               <div>
                 <Label>
                   Required skills

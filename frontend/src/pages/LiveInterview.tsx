@@ -7,6 +7,7 @@ import { isSpeechRecognitionSupported, useSpeechRecognition } from '@/hooks/useS
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
 import { useCameraPreview } from '@/hooks/useCameraPreview'
 import { useInterviewPreferencesStore } from '@/store/interviewPreferencesStore'
+import { useLiveInterviewStore } from '@/store/liveInterviewStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -271,6 +272,11 @@ export function LiveInterviewPage() {
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
+  }, [isLive])
+
+  useEffect(() => {
+    useLiveInterviewStore.getState().setIsLive(isLive)
+    return () => useLiveInterviewStore.getState().setIsLive(false)
   }, [isLive])
 
   const blocker = useBlocker(isLive)

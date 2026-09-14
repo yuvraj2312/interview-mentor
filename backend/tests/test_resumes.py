@@ -2,6 +2,7 @@ import io
 
 from docx import Document
 
+from app.core.config import settings
 from tests.conftest import signup_and_get_tokens
 
 DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -37,6 +38,18 @@ def test_upload_resume_rejects_unsupported_content_type(client):
         headers={"Authorization": f"Bearer {tokens['access_token']}"},
     )
     assert response.status_code == 400
+
+
+def test_upload_resume_rejects_oversized_file(client):
+    tokens = signup_and_get_tokens(client)
+    oversized = b"x" * (settings.resume_max_upload_bytes + 1)
+    response = client.post(
+        "/resumes",
+        files={"file": ("resume.docx", oversized, DOCX_CONTENT_TYPE)},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert response.status_code == 413
+    assert "10MB" in response.json()["detail"]
 
 
 def test_upload_resume_creates_uploaded_row(client):

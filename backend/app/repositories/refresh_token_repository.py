@@ -6,8 +6,20 @@ from sqlalchemy.orm import Session as DBSession
 from app.models import RefreshToken
 
 
-def create(db: DBSession, *, user_id: uuid.UUID, token_hash: str, expires_at: datetime) -> RefreshToken:
+def create(
+    db: DBSession,
+    *,
+    user_id: uuid.UUID,
+    token_hash: str,
+    expires_at: datetime,
+    session_id: uuid.UUID | None = None,
+    session_started_at: datetime | None = None,
+) -> RefreshToken:
     token = RefreshToken(user_id=user_id, token_hash=token_hash, expires_at=expires_at)
+    if session_id is not None:
+        token.session_id = session_id
+    if session_started_at is not None:
+        token.session_started_at = session_started_at
     db.add(token)
     db.flush()
     return token
