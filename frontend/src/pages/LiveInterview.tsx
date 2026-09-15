@@ -200,6 +200,28 @@ export function LiveInterviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.current_question?.turn_index, ttsEnabled, tts.isSupported])
 
+  // Brief "good answer, moving on" banner whenever the session advances to a
+  // new main-topic question (the evaluator was satisfied with the last
+  // answer - no follow-up triggered). Only fires on a transition actually
+  // observed while this page is open (prevTurnIndexRef starts undefined),
+  // so it never appears on initial connect/reconnect for a question that
+  // was already current before this render.
+  useEffect(() => {
+    const turnIndex = state?.current_question?.turn_index
+    const isFollowup = state?.current_question?.is_followup
+    const prevTurnIndex = prevTurnIndexRef.current
+    prevTurnIndexRef.current = turnIndex
+
+    if (prevTurnIndex === undefined || turnIndex === undefined || turnIndex === prevTurnIndex) return
+    if (isFollowup) {
+      setAcknowledgment(null)
+      return
+    }
+    setAcknowledgment(ACKNOWLEDGMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGMENT_PHRASES.length)])
+    const timer = setTimeout(() => setAcknowledgment(null), 5000)
+    return () => clearTimeout(timer)
+  }, [state?.current_question?.turn_index, state?.current_question?.is_followup])
+
   // Toggling TTS off mid-narration should stop it immediately and snap to
   // the full text rather than leaving it partially revealed.
   useEffect(() => {
@@ -448,6 +470,7 @@ export function LiveInterviewPage() {
                 <CardDescription>Difficulty {state.current_question.difficulty} of 5</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
+                {acknowledgment && <p className="text-sm font-medium text-success-700">{acknowledgment}</p>}
                 <p className="text-sm text-ink-900">{displayedQuestionText}</p>
 
                 <div className="flex flex-col gap-2 border-l-2 border-l-ink-200 pl-4">
