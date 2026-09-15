@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Mic, Video, VideoOff, Volume2, VolumeX } from 'lucide-react'
 import { Link, useBlocker, useParams } from 'react-router-dom'
 
@@ -18,6 +18,21 @@ import { Textarea } from '@/components/ui/textarea'
 import { CameraPreviewTile } from '@/components/voice/CameraPreviewTile'
 import { CompletedTopicCard, ScoreRow } from '@/components/interview/CompletedTopicCard'
 import type { InterviewTurnOut } from '@/lib/api'
+
+// Shown as a brief transition banner whenever the interview advances to a
+// new main topic (i.e. the evaluator didn't need a follow-up on the last
+// answer) - a rotating set rather than one fixed line so it reads less
+// scripted across a multi-topic session. Deliberately no LLM call here
+// (see interview_graph.py's deliver_question_node docstring, still a
+// no-op pass-through): a dynamic per-turn acknowledgment would add cost
+// and latency to every non-follow-up turn, working against the point of
+// a tight per-session cost cap.
+const ACKNOWLEDGMENT_PHRASES = [
+  "Good answer! Let's move to the next question.",
+  "Nice work on that one - on to the next question.",
+  "Solid answer. Moving on to the next question.",
+  "Good answer - let's keep going.",
+]
 
 function splitIntoSentences(text: string): string[] {
   const trimmed = text.trim()
@@ -98,6 +113,12 @@ export function LiveInterviewPage() {
   const [clarificationQuestion, setClarificationQuestion] = useState('')
   const [revealedSentenceCount, setRevealedSentenceCount] = useState(0)
   const [revealedClarificationSentenceCount, setRevealedClarificationSentenceCount] = useState(0)
+  const [acknowledgment, setAcknowledgment] = useState<string | null>(null)
+  // undefined until the first live turn_index is observed, so the
+  // acknowledgment effect below can tell "just hydrated/reconnected" (no
+  // acknowledgment - we don't know whether this state is fresh) apart from
+  // "the turn actually just advanced while this page was open."
+  const prevTurnIndexRef = useRef<number | undefined>(undefined)
 
   const questionText = state?.current_question?.question_text ?? ''
   const sentences = useMemo(() => splitIntoSentences(questionText), [questionText])

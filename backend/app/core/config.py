@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     interview_session_state_ttl_seconds: int = 86400
     interview_session_stuck_transient_seconds: int = 120
     ws_auth_timeout_seconds: float = 10.0
-    interview_session_max_cost_usd: float = 2.0
+    interview_session_max_cost_usd: float = 0.5
 
     minio_endpoint_url: str = "http://localhost:9000"
     # No fallback, deliberately - "minioadmin"/"minioadmin" is a real,
