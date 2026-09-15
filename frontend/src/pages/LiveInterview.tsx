@@ -101,6 +101,20 @@ export function LiveInterviewPage() {
   const setSttEnabled = useInterviewPreferencesStore((s) => s.setSttEnabled)
   const sttSupported = isSpeechRecognitionSupported()
 
+  // ttsEnabled/sttEnabled are persisted to sessionStorage (see
+  // interviewPreferencesStore) so a mid-session toggle survives a page
+  // refresh - but that same persistence meant a tester who muted the
+  // speaker or mic in one interview would land on the *next* interview,
+  // in the same browser tab, with it still off. Both should default on
+  // for every fresh interview regardless of what a previous session left
+  // behind, so force them on whenever this page mounts for a given
+  // session id. A later explicit toggle within this session is untouched.
+  useEffect(() => {
+    setTtsEnabled(true)
+    setSttEnabled(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
   // Two fully independent recognizers - one per field. Only one may capture
   // at a time (enforced explicitly below); neither auto-starts, capture only
   // ever begins from an explicit click on that field's own mic button.
